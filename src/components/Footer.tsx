@@ -111,9 +111,6 @@ export default function Footer({ currentLang, onNavigate }: FooterProps) {
             <p>
               {translations['Company Register Body'][currentLang]}
             </p>
-            <p>
-              {currentLang === 'ko' ? '호스팅서비스사업자: Google Cloud Run Engine Instance' : 'Hosting Provider: Google Cloud Run Engine Instance'}
-            </p>
           </div>
           <div className="pt-4 sm:pt-0 text-left sm:text-right text-[10px] font-mono tracking-wider text-stone-600">
             <p>{translations['Footer Disclaimer'][currentLang]}</p>
