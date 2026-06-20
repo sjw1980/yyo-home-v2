@@ -1,5 +1,6 @@
 import { Phone, Mail, MapPin, ShieldAlert, Award, FileText } from 'lucide-react';
 import { translations } from '../data';
+import YOLogo from './YOLogo';
 
 interface FooterProps {
   currentLang: 'ko' | 'en';
@@ -18,9 +19,12 @@ export default function Footer({ currentLang, onNavigate }: FooterProps) {
           
           {/* Logo / Tagline */}
           <div className="md:col-span-4 space-y-4">
-            <span className="font-sans text-2xl font-bold tracking-[0.15em] text-white block select-none">
-              YYO
-            </span>
+            <div className="flex items-center space-x-3 mb-1">
+              <YOLogo variant="original" size={32} className="rounded-lg" />
+              <span className="font-sans text-2xl font-bold tracking-[0.15em] text-white block select-none">
+                YYO
+              </span>
+            </div>
             <p className="text-xs text-stone-400 font-sans tracking-wide">
               {translations['Company Register Title'][currentLang]}
             </p>

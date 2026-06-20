@@ -334,8 +334,8 @@ export const translations: TranslationDictionary = {
     en: "Yunyulon Co., Ltd. (Short: YYO)"
   },
   "Company Register Body": {
-    ko: "대표이사: 이지혜 | 사업자등록번호: 452-87-01915 | 개인정보보호책임자: 이지혜",
-    en: "CEO: LEE JI HYE | Business Registration No: 452-87-01915 | Chief Privacy Officer: LEE JI HYE"
+    ko: "대표이사: 이지혜 | 개인정보보호책임자: 이지혜",
+    en: "CEO: LEE JI HYE | Chief Privacy Officer: LEE JI HYE"
   },
   "Footer Disclaimer": {
     ko: "© 2026 주식회사 윤율온. All Rights Reserved. 본 사이트에 수록된 임베디드 아키텍처 및 진단 알고리즘은 오토사 표준을 준수합니다.",

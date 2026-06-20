@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Menu, X, Globe, Cpu, ShieldAlert, Navigation, Mail, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { translations } from '../data';
+import YOLogo from './YOLogo';
 
 interface HeaderProps {
   currentLang: 'ko' | 'en';
@@ -38,10 +39,8 @@ export default function Header({
             onClick={() => onNavigate('hero')}
             id="header-logo"
           >
-            {/* Minimal High-Tech Symbol / Circle representing wheel or signal */}
-            <div className="w-10 h-10 rounded-xl bg-[#56807d]/20 border border-[#71a09d]/40 flex items-center justify-center transition-transform group-hover:scale-105 mr-3">
-              <span className="font-mono text-base font-bold text-[#7dbaaf]">YO</span>
-            </div>
+            {/* Beautiful Custom App Logo */}
+            <YOLogo variant="original" size={40} className="mr-3 transition-transform group-hover:scale-105" />
             <div className="flex flex-col">
               <span className="font-sans text-xl font-bold tracking-[0.15em] text-white">
                 YYO

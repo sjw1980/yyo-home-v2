@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { translations } from '../data';
 import { Award, ShieldCheck, Heart, Sparkles, Terminal, Activity } from 'lucide-react';
+import YOLogo from './YOLogo';
 
 interface BrandStoryProps {
   currentLang: 'ko' | 'en';
@@ -58,9 +59,7 @@ export default function BrandStory({ currentLang }: BrandStoryProps) {
             </p>
             
             <div className="pt-6 border-t border-stone-800 flex items-center space-x-4">
-              <div className="w-12 h-12 rounded-xl bg-[#56807d]/20 border border-[#71a09d]/30 flex items-center justify-center text-[#7dbaaf] font-bold text-sm">
-                YYO
-              </div>
+              <YOLogo variant="original" size={48} className="rounded-xl" />
               <div className="text-xs tracking-widest text-[#9bb09e]">
                 <span className="font-semibold text-white">주식회사 윤율온</span>
                 <span className="text-stone-600 mx-2">|</span>
