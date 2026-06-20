@@ -1,0 +1,6 @@
+{
+  "name": "주식회사 윤율온 (YYO)",
+  "description": "최상급 차량용 임베디드 및 엔지니어링 기술 솔루션, DoIP 부트로더 OTA, UDS 전장 자가진동, 및 AUTOSAR 연동 전문 기술 스타트업 주식회사 윤율온(YYO)의 공식 포트폴리오 사이트입니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

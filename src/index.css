@@ -1,0 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Prata&family=Noto+Serif+KR:wght@200;300;400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Prata", "Noto Serif KR", serif;
+  --font-sans: "Inter", sans-serif;
+}
+
