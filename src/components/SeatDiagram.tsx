@@ -17,6 +17,11 @@ interface SeatDiagramProps {
 const PIVOT_X = 300;
 const PAN_Y = 268;
 
+/** 레그레스트 패드 길이(px) — 0°(수직 폴딩)에서 바닥 레일에 닿지 않는 길이 */
+const LEGREST_LEN = 70;
+/** 축 0° 일 때 레그레스트 화면 회전각: 쿠션(시트)에 대해 90° 아래 = 수직 폴딩 */
+const LEGREST_DOWN_DEG = -90;
+
 export default function SeatDiagram({ positions, targets, activeAxis, lang }: SeatDiagramProps) {
   /** 축 활성 여부 → 강조 스타일 */
   const on = (axis: AxisKey) => activeAxis === axis;
@@ -39,35 +44,94 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
   const legPivotX = cushionFrontX + 4;
   const legPivotY = PAN_Y + 16;
 
+  /**
+   * 레그레스트 회전각
+   *  축 0°    : 쿠션 대비 90° 아래 — 아래를 향하는 수직 폴딩 상태
+   *  축 max(45): 쿠션과 수평 — 허벅지/종아리 지지 전개 상태
+   * 축 0~45° 구간을 화면상 90° 회전(수직 → 수평)으로 매핑한다.
+   */
+  const legRot =
+    LEGREST_DOWN_DEG + (legDeg / AXIS_CONFIG.legrest.max) * -LEGREST_DOWN_DEG;
+
   const fmt = (axis: AxisKey, value: number) =>
     `${value.toFixed(AXIS_CONFIG[axis].unit === '°' ? 1 : 0)}${AXIS_CONFIG[axis].unit}`;
 
-  /** 활성 축 수치 라벨 (함수 호출로 렌더링 → 리렌더 시 리마운트 방지) */
+  /** 라벨 클램프 경계 (시트 그룹이 translate 되므로 로컬 좌표로 보정) */
+  const tagLeft = { left: 4 - slidePx };
+  const tagRight = { right: 556 - slidePx };
+
+  /** 라벨 폭 추정 (CJK 2칸 / ASCII 1칸) */
+  const labelWidth = (s: string) =>
+    Array.from(s).reduce((n, ch) => n + (ch.charCodeAt(0) > 0x2e80 ? 10.6 : 6), 0);
+
+  /**
+   * 부품 수치 라벨
+   *  - 최상단 오버레이 레이어에서만 호출되어 시트 본체에 가려지지 않는다
+   *  - 어두운 칩 배경을 깔아 본체 위에서도 읽히도록 한다
+   */
   const partTag = (
     axis: AxisKey,
     x: number,
     y: number,
     anchor: 'start' | 'middle' | 'end' = 'middle',
-  ) => (
-    <g className="pointer-events-none select-none">
-      <text
-        x={x}
-        y={y}
-        textAnchor={anchor}
-        fontSize="10"
-        fontFamily="monospace"
-        fill={on(axis) ? '#7dbaaf' : '#6f8480'}
-        fontWeight={on(axis) ? 700 : 400}
-      >
-        {AXIS_CONFIG[axis].name[lang]} {fmt(axis, positions[axis])}
-      </text>
-      {on(axis) && (
-        <text x={x} y={y + 12} textAnchor={anchor} fontSize="8.5" fontFamily="monospace" fill="#e0b96ad0">
-          TGT {fmt(axis, targets[axis])}
+    bounds?: { left?: number; right?: number },
+  ) => {
+    const main = `${AXIS_CONFIG[axis].name[lang]} ${fmt(axis, positions[axis])}`;
+    const sub = `TGT ${fmt(axis, targets[axis])}`;
+    const active = on(axis);
+    const w = Math.max(labelWidth(main), labelWidth(sub)) + 10;
+    const h = active ? 25 : 14;
+    let ax = x;
+    let left = anchor === 'end' ? x - w + 5 : anchor === 'middle' ? x - w / 2 : x - 5;
+    // 캔버스 밖으로 밀려나지 않도록 칩 밀어내기 (라벨 텍스트도 함께 이동)
+    if (bounds?.left !== undefined && left < bounds.left) {
+      ax += bounds.left - left;
+      left = bounds.left;
+    }
+    if (bounds?.right !== undefined && left + w > bounds.right) {
+      const d = left + w - bounds.right;
+      ax -= d;
+      left -= d;
+    }
+    return (
+      <g className="pointer-events-none select-none">
+        <rect
+          x={left}
+          y={y - 10.5}
+          width={w}
+          height={h}
+          rx="4"
+          fill="#070c0b"
+          opacity="0.9"
+          stroke={active ? '#7dbaaf' : '#243230'}
+          strokeWidth="0.9"
+        />
+        <text
+          x={ax}
+          y={y}
+          textAnchor={anchor}
+          fontSize="10"
+          fontFamily="monospace"
+          fill={active ? '#8fd0c2' : '#9fb3ae'}
+          fontWeight={active ? 700 : 400}
+        >
+          {main}
         </text>
-      )}
-    </g>
-  );
+        {active && (
+          <text
+            x={ax}
+            y={y + 11.5}
+            textAnchor={anchor}
+            fontSize="8.5"
+            fontFamily="monospace"
+            fill="#e0b96a"
+          >
+            {sub}
+          </text>
+        )}
+      </g>
+    );
+  };
 
   return (
     <svg viewBox="0 0 560 420" className="w-full h-full select-none">
@@ -105,9 +169,13 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
           strokeWidth="1.4"
         />
       ))}
-      {/* 슬라이드 현재 위치 인디케이터 */}
-      <polygon
-        points={`${285 + slidePx},356 ${277 + slidePx},344 ${293 + slidePx},344`}
+      {/* 슬라이드 현재 위치 (레일 하이라이트) */}
+      <rect
+        x={285 + slidePx - 3.5}
+        y="358"
+        width="7"
+        height="20"
+        rx="3.5"
         fill={on('slide') ? '#7dbaaf' : '#4c635d'}
         filter={glowOf('slide')}
       />
@@ -132,19 +200,18 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
         strokeWidth="1.4"
         strokeDasharray="4 4"
       />
-      {partTag('height', 104, 320, 'end')}
 
       {/* ================= 시트 본체 (슬라이드 + 하이트 변환) ================= */}
       <g transform={`translate(${slidePx}, ${-heightPx})`}>
-        {/* 등받이 (리클라이너 회전) */}
-        <g transform={`rotate(${reclineDeg}, ${PIVOT_X + 6}, ${PAN_Y})`}>
+        {/* 등받이 (리클라이너 회전) — 슬림 패드 */}
+        <g transform={`rotate(${reclineDeg}, ${PIVOT_X + 4}, ${PAN_Y})`}>
           <path
             d={`M ${PIVOT_X + 2} ${PAN_Y + 4}
-                L ${PIVOT_X + 6} ${PAN_Y - 152}
-                Q ${PIVOT_X + 8} ${PAN_Y - 172} ${PIVOT_X + 30} ${PAN_Y - 174}
-                L ${PIVOT_X + 52} ${PAN_Y - 174}
-                Q ${PIVOT_X + 68} ${PAN_Y - 172} ${PIVOT_X + 66} ${PAN_Y - 150}
-                L ${PIVOT_X + 58} ${PAN_Y + 4} Z`}
+                L ${PIVOT_X + 3} ${PAN_Y - 150}
+                Q ${PIVOT_X + 4} ${PAN_Y - 170} ${PIVOT_X + 19} ${PAN_Y - 172}
+                L ${PIVOT_X + 21} ${PAN_Y - 172}
+                Q ${PIVOT_X + 32} ${PAN_Y - 170} ${PIVOT_X + 31} ${PAN_Y - 148}
+                L ${PIVOT_X + 27} ${PAN_Y + 4} Z`}
             fill="url(#seatPad)"
             stroke={strokeOf('recline')}
             strokeWidth="2.4"
@@ -152,46 +219,33 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
           />
           {/* 헤드레스트 */}
           <rect
-            x={PIVOT_X + 12}
-            y={PAN_Y - 224}
-            width="52"
-            height="42"
-            rx="14"
+            x={PIVOT_X + 1}
+            y={PAN_Y - 222}
+            width="34"
+            height="40"
+            rx="12"
             fill="url(#seatPad)"
             stroke={strokeOf('recline')}
             strokeWidth="2.2"
           />
           <line
-            x1={PIVOT_X + 30}
+            x1={PIVOT_X + 17}
             y1={PAN_Y - 182}
-            x2={PIVOT_X + 30}
-            y2={PAN_Y - 174}
+            x2={PIVOT_X + 17}
+            y2={PAN_Y - 172}
             stroke="#4a5f59"
-            strokeWidth="4"
+            strokeWidth="3.4"
           />
           {/* 럼버 서포트 (전후 돌출 + 상하 위치) */}
           <ellipse
-            cx={PIVOT_X + 8 - lumbarPush}
+            cx={PIVOT_X + 5 - lumbarPush}
             cy={lumbarY}
-            rx={12 + lumbarPush * 0.7}
-            ry="26"
+            rx={9 + lumbarPush * 0.5}
+            ry="24"
             fill={fillOf('lumber', '#2a3b36')}
             stroke={strokeOf('lumber', '#5c726c')}
             strokeWidth="2"
             filter={glowOf('lumber')}
-          />
-          <line
-            x1={PIVOT_X + 62}
-            y1={lumbarY}
-            x2={PIVOT_X + 84}
-            y2={lumbarY}
-            stroke={strokeOf('lumber_height', '#3c4f4a')}
-            strokeWidth="1.4"
-            strokeDasharray="4 4"
-          />
-          <polygon
-            points={`${PIVOT_X + 84},${lumbarY - 5} ${PIVOT_X + 92},${lumbarY} ${PIVOT_X + 84},${lumbarY + 5}`}
-            fill={strokeOf('lumber_height', '#3c4f4a')}
           />
         </g>
 
@@ -233,14 +287,12 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
             strokeWidth="2.2"
             filter={glowOf('bolster')}
           />
-          {partTag('bolster', PIVOT_X - 54, PAN_Y - bolsterH - 16)}
-
-          {/* 레그레스트 (레그 피벗 회전) */}
-          <g transform={`rotate(${legDeg}, ${legPivotX}, ${legPivotY})`}>
+          {/* 레그레스트 (레그 피벗 회전 — 0° 이면 쿠션에 수직으로 아래를 향함) */}
+          <g transform={`rotate(${legRot}, ${legPivotX}, ${legPivotY})`}>
             <path
               d={`M ${legPivotX} ${legPivotY - 8}
-                  L ${legPivotX - 78} ${legPivotY - 2}
-                  Q ${legPivotX - 92} ${legPivotY + 2} ${legPivotX - 90} ${legPivotY + 16}
+                  L ${legPivotX - (LEGREST_LEN - 12)} ${legPivotY - 2}
+                  Q ${legPivotX - LEGREST_LEN} ${legPivotY + 2} ${legPivotX - LEGREST_LEN + 2} ${legPivotY + 16}
                   L ${legPivotX - 8} ${legPivotY + 20} Z`}
               fill="url(#seatPad)"
               stroke={strokeOf('legrest')}
@@ -248,6 +300,15 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
               filter={glowOf('legrest')}
             />
           </g>
+          {/* 레그 피벗 */}
+          <circle
+            cx={legPivotX}
+            cy={legPivotY}
+            r="3.6"
+            fill={on('legrest') ? '#7dbaaf' : '#3d514c'}
+            stroke="#0b1412"
+            strokeWidth="1.2"
+          />
         </g>
 
         {/* 시트 프레임 */}
@@ -261,13 +322,6 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
           stroke="#3d514c"
           strokeWidth="1.6"
         />
-
-        {partTag('tilt', cushionFrontX - 12, PAN_Y - 30, 'end')}
-        {partTag('cushion', cushionFrontX - 12, PAN_Y + 44, 'end')}
-        {partTag('legrest', legPivotX - 96, legPivotY + 46, 'end')}
-        {partTag('recline', PIVOT_X + 108, PAN_Y - 120, 'start')}
-        {partTag('lumber', PIVOT_X + 108, lumbarY - 34, 'start')}
-        {partTag('lumber_height', PIVOT_X + 108, lumbarY + 44, 'start')}
       </g>
 
       {/* 릴렉스 On/Off 배지 */}
@@ -298,8 +352,18 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
         </g>
       )}
 
-      {/* 슬라이드 수치 */}
-      {partTag('slide', 285 + slidePx, 340)}
+      {/* ================= 부품 수치 오버레이 (본체를 가리지 않도록 최상단) ================= */}
+      <g transform={`translate(${slidePx}, ${-heightPx})`}>
+        {partTag('tilt', cushionFrontX - 24, PAN_Y - 30, 'end', tagLeft)}
+        {partTag('bolster', PIVOT_X - 58, PAN_Y - bolsterH - 22, 'middle', tagRight)}
+        {partTag('cushion', cushionFrontX - 24, PAN_Y + 38, 'end', tagLeft)}
+        {partTag('legrest', cushionFrontX - 24, PAN_Y + 60, 'end', tagLeft)}
+        {partTag('recline', PIVOT_X + 96, PAN_Y - 168, 'start', tagRight)}
+        {partTag('lumber', PIVOT_X + 96, lumbarY - 16, 'start', tagRight)}
+        {partTag('lumber_height', PIVOT_X + 96, lumbarY + 16, 'start', tagRight)}
+      </g>
+      {partTag('height', 100, 356, 'end', { left: 4 })}
+      {partTag('slide', 285 + slidePx, 338, 'middle', { left: 4, right: 556 })}
     </svg>
   );
 }

@@ -136,7 +136,10 @@ export const AXIS_CONFIG: Record<AxisKey, AxisConfig> = {
     softMin: 4,
     softMax: 41,
     speed: 8,
-    desc: { ko: '종아리 받침대 각도를 상/하로 조절합니다.', en: 'Raises or lowers the calf support.' },
+    desc: {
+      ko: '종아리 받침대를 회전시킵니다. 0° = 시트에 수직으로 아래를 향함, 최대 = 수평 전개.',
+      en: 'Rotates the calf support. 0° = folded straight down (90° to the seat), max = horizontal.',
+    },
   },
   cushion: {
     key: 'cushion',
