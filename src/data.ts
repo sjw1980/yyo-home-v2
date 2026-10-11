@@ -328,6 +328,48 @@ export const translations: TranslationDictionary = {
     en: "Real-Time Controller Area Network (CAN) Bus Monitored Frame Logs"
   },
 
+  // DPSS Power Seat Simulator
+  "Seat Simulator": {
+    ko: "시트 시뮬레이터",
+    en: "Seat Simulator"
+  },
+  "Seat Simulator Title": {
+    ko: "DPSS 전동 시트 제어 시뮬레이터",
+    en: "DPSS Power Seat Control Simulator"
+  },
+  "Seat Simulator Subtitle": {
+    ko: "운전석 시트 조작기(DPSS)의 6개 조작 모드와 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 방향을 눌러 유지하면 시트 형상이 실시간으로 변화합니다.",
+    en: "Drive all 6 control modes and 10 seat axes through a virtual motor physics model — press and hold a direction and the seat geometry moves in real time."
+  },
+  "Seat Mode Panel": {
+    ko: "조작 모드 선택 (MODE SELECT)",
+    en: "CONTROL MODE SELECT"
+  },
+  "Seat Diagram Panel": {
+    ko: "가상 시트 물리 모델 (SEAT PHYSICS)",
+    en: "VIRTUAL SEAT PHYSICS MODEL"
+  },
+  "Seat Control Panel": {
+    ko: "조작 패널 (CONTROL)",
+    en: "CONTROL PANEL"
+  },
+  "Seat Axis Monitor": {
+    ko: "전 축 실시간 모니터 (AXIS MONITOR)",
+    en: "LIVE AXIS MONITOR"
+  },
+  "Seat Control Hint": {
+    ko: "패드를 누른 상태로 유지하면 해당 방향으로 연속 조작됩니다. 패널을 클릭한 뒤 방향키(4-Way) · Q·E(모드 전환) · Space(AUTO DEMO)로도 조작할 수 있습니다.",
+    en: "Press and hold a pad button to drive that direction continuously. Focus the panel and use Arrow keys (4-Way) · Q·E (change mode) · Space (AUTO DEMO)."
+  },
+  "Seat Reset Pose": {
+    ko: "전 축 초기 위치로 리셋",
+    en: "Reset All Axes to Center"
+  },
+  "Seat Disclaimer": {
+    ko: "물리 상수(가동범위·모터 속도·소프트 리밋)는 YYO DPSS 데스크톱 시뮬레이터와 동일하며, 실제 차량의 ECU·센서·안전 로직은 포함하지 않는 웹 데모입니다.",
+    en: "Physics constants (travel, motor speed, soft limits) mirror the YYO DPSS desktop simulator. This web demo contains no vehicle ECU, sensors or safety logic."
+  },
+
   // Footer / Corporate Info
   "Company Register Title": {
     ko: "주식회사 윤율온 (Yunyulon Co., Ltd.)",

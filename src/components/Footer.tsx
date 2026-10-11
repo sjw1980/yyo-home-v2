@@ -58,6 +58,11 @@ export default function Footer({ currentLang, onNavigate }: FooterProps) {
                 </button>
               </li>
               <li>
+                <button onClick={() => onNavigate('seat-simulator')} className="hover:text-white transition cursor-pointer select-none">
+                  {translations['Seat Simulator'][currentLang]}
+                </button>
+              </li>
+              <li>
                 <button onClick={() => onNavigate('location')} className="hover:text-white transition cursor-pointer select-none">
                   {translations['Find Us'][currentLang]}
                 </button>
