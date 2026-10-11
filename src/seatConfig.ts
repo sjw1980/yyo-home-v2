@@ -19,12 +19,15 @@ export type AxisKey =
   | 'relaxation_return';
 
 export type ModeKey =
-  | 'tilt_legrest'
-  | 'cushion_bolster'
-  | 'recline_height'
+  | 'tilt'
+  | 'legrest'
+  | 'cushion'
+  | 'bolster'
+  | 'recline'
+  | 'height'
   | 'lumber'
   | 'slide'
-  | 'relaxation_return';
+  | 'relaxation';
 
 export type Direction = 'up' | 'down' | 'left' | 'right';
 
@@ -54,8 +57,8 @@ export interface ModeConfig {
   status: number;
   name: LocalizedText;
   subName: string;
-  /** 좌우(L/R) 조작 축 */
-  lrAxis: AxisKey;
+  /** 좌우(L/R) 조작 축 (상하 전용 모드는 null) */
+  lrAxis: AxisKey | null;
   /** 상하(U/D) 조작 축 (없으면 null) */
   udAxis: AxisKey | null;
   desc: LocalizedText;
@@ -185,7 +188,7 @@ export const AXIS_CONFIG: Record<AxisKey, AxisConfig> = {
   },
   relaxation_return: {
     key: 'relaxation_return',
-    name: { ko: '릴렉스 & 리턴', en: 'Relax / Return' },
+    name: { ko: '릴렉스', en: 'Relax' },
     code: 'RLX',
     unit: '%',
     min: 0,
@@ -193,96 +196,144 @@ export const AXIS_CONFIG: Record<AxisKey, AxisConfig> = {
     softMin: 0,
     softMax: 100,
     speed: 20,
-    desc: { ko: '좌: 리턴 조작 / 우: 릴렉션 조작', en: 'Left: Return / Right: Relaxation' },
+    desc: { ko: '릴렉션 포즈 적용률 (On/Off 프리셋)', en: 'Relax pose ratio (On/Off preset)' },
   },
 };
 
 
 export const MODE_ORDER: ModeKey[] = [
-  'tilt_legrest',
-  'cushion_bolster',
-  'recline_height',
+  'tilt',
+  'legrest',
+  'cushion',
+  'bolster',
+  'recline',
+  'height',
   'lumber',
   'slide',
-  'relaxation_return',
+  'relaxation',
 ];
 
 export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {
-  tilt_legrest: {
-    key: 'tilt_legrest',
+  tilt: {
+    key: 'tilt',
     status: 1,
-    name: { ko: '틸트 & 레그레스트', en: 'Tilt & Legrest' },
-    subName: 'Tilt / Legrest Control',
-    lrAxis: 'legrest',
+    name: { ko: '틸트', en: 'Tilt' },
+    subName: 'Cushion Tilt Control',
+    lrAxis: null,
     udAxis: 'tilt',
-    desc: { ko: '상하: 틸트 조작 / 좌우: 레그레스트 조작', en: 'U/D: Tilt / L/R: Legrest' },
+    desc: { ko: '상하: 쿠션 경사각 조작', en: 'U/D: cushion angle' },
   },
-  cushion_bolster: {
-    key: 'cushion_bolster',
+  legrest: {
+    key: 'legrest',
     status: 2,
-    name: { ko: '쿠션 & 볼스터', en: 'Cushion & Bolster' },
-    subName: 'Cushion / Bolster Control',
-    lrAxis: 'bolster',
-    udAxis: 'cushion',
-    desc: { ko: '상하: 쿠션 조작 / 좌우: 볼스터 조작', en: 'U/D: Cushion / L/R: Bolster' },
+    name: { ko: '레그레스트', en: 'Legrest' },
+    subName: 'Legrest Control',
+    lrAxis: 'legrest',
+    udAxis: null,
+    desc: { ko: '좌우: 종아리 받침대 각도 조작', en: 'L/R: calf support angle' },
   },
-  recline_height: {
-    key: 'recline_height',
+  cushion: {
+    key: 'cushion',
     status: 3,
-    name: { ko: '리클라이너 & 하이트', en: 'Recline & Height' },
-    subName: 'Recline / Height Control',
+    name: { ko: '쿠션 익스텐션', en: 'Cushion Extension' },
+    subName: 'Cushion Extension Control',
+    lrAxis: null,
+    udAxis: 'cushion',
+    desc: { ko: '상하: 쿠션 길이 조작', en: 'U/D: cushion length' },
+  },
+  bolster: {
+    key: 'bolster',
+    status: 4,
+    name: { ko: '볼스터', en: 'Bolster' },
+    subName: 'Side Bolster Control',
+    lrAxis: 'bolster',
+    udAxis: null,
+    desc: { ko: '좌우: 사이드 볼스터 밀착 조작', en: 'L/R: side bolster grip' },
+  },
+  recline: {
+    key: 'recline',
+    status: 5,
+    name: { ko: '리클라이너', en: 'Recline' },
+    subName: 'Seat Back Recline',
     lrAxis: 'recline',
+    udAxis: null,
+    desc: { ko: '좌우: 등받이 각도 조작', en: 'L/R: seat back angle' },
+  },
+  height: {
+    key: 'height',
+    status: 6,
+    name: { ko: '하이트', en: 'Height' },
+    subName: 'Seat Height Control',
+    lrAxis: null,
     udAxis: 'height',
-    desc: { ko: '좌우: 리클라이너 조작 / 상하: 하이트 조작', en: 'L/R: Recline / U/D: Height' },
+    desc: { ko: '상하: 시트 높이 조작', en: 'U/D: seat height' },
   },
   lumber: {
     key: 'lumber',
-    status: 4,
+    status: 7,
     name: { ko: '럼버 서포트', en: 'Lumbar Support' },
     subName: 'Lumbar Support Control',
     lrAxis: 'lumber',
     udAxis: 'lumber_height',
-    desc: { ko: '좌우: 럼버 전후 조작 / 상하: 럼버 높이 조작', en: 'L/R: Fore-Aft / U/D: Height' },
+    desc: { ko: '좌우: 럼버 전후 / 상하: 럼버 높이 (4-Way)', en: 'L/R: fore-aft / U/D: height (4-Way)' },
   },
   slide: {
     key: 'slide',
-    status: 5,
+    status: 8,
     name: { ko: '슬라이드', en: 'Slide' },
     subName: 'Slide Control',
     lrAxis: 'slide',
     udAxis: null,
-    desc: { ko: '좌우: 슬라이드 전후 조작 (상하 조작 없음)', en: 'L/R: Slide travel (no U/D axis)' },
+    desc: { ko: '좌우: 시트 전후 이동 조작', en: 'L/R: seat travel' },
   },
-  relaxation_return: {
-    key: 'relaxation_return',
-    status: 6,
-    name: { ko: '릴렉스 & 리턴', en: 'Relax & Return' },
-    subName: 'Relax / Return Control',
+  relaxation: {
+    key: 'relaxation',
+    status: 9,
+    name: { ko: '릴렉스', en: 'Relax' },
+    subName: 'Relaxation Preset',
     lrAxis: 'relaxation_return',
     udAxis: null,
-    desc: { ko: '좌: 리턴 조작 / 우: 릴렉션 조작', en: 'Left: Return / Right: Relaxation' },
+    desc: { ko: 'On: 릴렉션 포즈 적용 / Off: 직전 값 복귀', en: 'On: apply relax pose / Off: restore' },
   },
 };
 
-/** 원형 조작기 주변 4-Way 기능 라벨 (circular_button.py MODE_SPEC_LABELS 대응) */
+/** 모드 카드 안 방향 버튼 라벨 (null = 해당 방향 조작 없음) */
 export const MODE_SPEC_LABELS: Record<ModeKey, Record<Direction, LocalizedText | null>> = {
-  tilt_legrest: {
-    up: { ko: '틸트 올림', en: 'Tilt Up' },
-    down: { ko: '틸트 내림', en: 'Tilt Down' },
+  tilt: {
+    up: { ko: '틸트 상승', en: 'Tilt Up' },
+    down: { ko: '틸트 하강', en: 'Tilt Down' },
+    left: null,
+    right: null,
+  },
+  legrest: {
+    up: null,
+    down: null,
     left: { ko: '레그레스트 올림', en: 'Legrest Up' },
     right: { ko: '레그레스트 내림', en: 'Legrest Down' },
   },
-  cushion_bolster: {
+  cushion: {
     up: { ko: '쿠션 팽창', en: 'Cushion Inflation' },
     down: { ko: '쿠션 수축', en: 'Cushion Deflation' },
+    left: null,
+    right: null,
+  },
+  bolster: {
+    up: null,
+    down: null,
     left: { ko: '볼스터 팽창', en: 'Bolster Inflation' },
     right: { ko: '볼스터 수축', en: 'Bolster Deflation' },
   },
-  recline_height: {
-    up: { ko: '하이트 상승', en: 'Height Up' },
-    down: { ko: '하이트 하강', en: 'Height Down' },
-    left: { ko: '리클라이너 전진', en: 'Recline Fwd' },
-    right: { ko: '리클라이너 후진', en: 'Recline Back' },
+  recline: {
+    up: null,
+    down: null,
+    left: { ko: '등받이 전진', en: 'Recline Fwd' },
+    right: { ko: '등받이 후진', en: 'Recline Back' },
+  },
+  height: {
+    up: { ko: '시트 상승', en: 'Height Up' },
+    down: { ko: '시트 하강', en: 'Height Down' },
+    left: null,
+    right: null,
   },
   lumber: {
     up: { ko: '럼버 상단', en: 'Lumbar Upper' },
@@ -296,15 +347,15 @@ export const MODE_SPEC_LABELS: Record<ModeKey, Record<Direction, LocalizedText |
     left: { ko: '슬라이드 전진', en: 'Slide Forward' },
     right: { ko: '슬라이드 후진', en: 'Slide Backward' },
   },
-  relaxation_return: {
+  relaxation: {
     up: null,
     down: null,
-    left: { ko: '릴턴 (원위치)', en: 'Relax Return' },
-    right: { ko: '릴렉션 모드', en: 'Relax Mode' },
+    left: null,
+    right: null,
   },
 };
 
-/** 초기 포지션: 각 축 중앙값, 릴렉스 & 리턴만 0%(리턴 상태) */
+/** 초기 포지션: 각 축 중앙값, 릴렉스만 0%(Off 상태) */
 export const INITIAL_POSITIONS: Record<AxisKey, number> = AXIS_ORDER.reduce(
   (acc, key) => {
     const conf = AXIS_CONFIG[key];
@@ -314,51 +365,68 @@ export const INITIAL_POSITIONS: Record<AxisKey, number> = AXIS_ORDER.reduce(
   {} as Record<AxisKey, number>,
 );
 
-/** 리턴(기본 드라이빙) 포즈 — 릴렉스 & 리턴 0% */
-export const RETURN_POSE: Record<AxisKey, number> = {
-  slide: 150,
-  recline: 12,
-  height: 50,
-  tilt: 7.5,
-  legrest: 0,
-  cushion: 30,
-  bolster: 24,
-  lumber: 25,
-  lumber_height: 25,
-  relaxation_return: 0,
-};
-
-/** 릴렉션(풀 릴렉스) 포즈 — 릴렉스 & 리턴 100% */
-export const RELAX_POSE: Record<AxisKey, number> = {
-  slide: 215,
-  recline: 48,
-  height: 38,
-  tilt: 4,
-  legrest: 38,
-  cushion: 52,
-  bolster: 12,
-  lumber: 30,
-  lumber_height: 18,
-  relaxation_return: 100,
-};
-
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-export function lerp(from: number, to: number, ratio: number): number {
-  return from + (to - from) * ratio;
+/**
+ * 릴렉스 On 프리셋 목표값
+ *  - 리클라이너 최대 / 틸트 최대 / 레그레스트 최대 / 쿠션 최대 팽창
+ *  - 슬라이드 · 하이트는 중간 위치
+ * Off 는 On 이전 값(스냅샷)으로 복귀합니다.
+ */
+export const RELAX_ON_TARGETS: Partial<Record<AxisKey, number>> = {
+  recline: AXIS_CONFIG.recline.max,
+  tilt: AXIS_CONFIG.tilt.max,
+  slide: (AXIS_CONFIG.slide.min + AXIS_CONFIG.slide.max) / 2,
+  legrest: AXIS_CONFIG.legrest.max,
+  cushion: AXIS_CONFIG.cushion.max,
+  height: (AXIS_CONFIG.height.min + AXIS_CONFIG.height.max) / 2,
+};
+
+/** 릴렉스 On/Off 로 구동되는 축 목록 */
+export const RELAX_ON_AXES = Object.keys(RELAX_ON_TARGETS) as AxisKey[];
+
+export interface RelaxPresetResult {
+  /** 갱신할 축 목표값 */
+  targets: Partial<Record<AxisKey, number>>;
+  /** Off 시 복원할 스냅샷 (Off 이후면 null) */
+  snapshot: Partial<Record<AxisKey, number>> | null;
 }
 
-/** 릴렉스 비율(0~1)에 따른 파생 축 목표 포즈 (릴렉스 & 리턴 모드 전용) */
-export function relaxPoseAt(ratio: number): Partial<Record<AxisKey, number>> {
-  const r = clamp(ratio, 0, 1);
-  const derived: AxisKey[] = ['slide', 'recline', 'height', 'tilt', 'legrest', 'cushion', 'bolster'];
-  const pose: Partial<Record<AxisKey, number>> = {};
-  derived.forEach((key) => {
-    pose[key] = lerp(RETURN_POSE[key], RELAX_POSE[key], r);
+/**
+ * 릴렉스 On/Off 프리셋 계산 (순수 함수)
+ *  On  : 현재 값 스냅샷 저장(처음 On 일 때만) + RELAX_ON_TARGETS 목표 / 릴렉스 100%
+ *  Off : 스냅샷 값으로 복귀(스냅샷 없으면 초기값) / 릴렉스 0%
+ */
+export function relaxPreset(
+  positions: Record<AxisKey, number>,
+  snapshot: Partial<Record<AxisKey, number>> | null,
+  on: boolean,
+): RelaxPresetResult {
+  const relaxConf = AXIS_CONFIG.relaxation_return;
+  const targets: Partial<Record<AxisKey, number>> = {
+    relaxation_return: on ? relaxConf.max : relaxConf.min,
+  };
+
+  if (on) {
+    RELAX_ON_AXES.forEach((k) => {
+      const conf = AXIS_CONFIG[k];
+      targets[k] = clamp(RELAX_ON_TARGETS[k] as number, conf.min, conf.max);
+    });
+    if (snapshot) return { targets, snapshot };
+
+    const next: Partial<Record<AxisKey, number>> = {};
+    RELAX_ON_AXES.forEach((k) => {
+      next[k] = positions[k];
+    });
+    return { targets, snapshot: next };
+  }
+
+  RELAX_ON_AXES.forEach((k) => {
+    targets[k] = snapshot?.[k] ?? INITIAL_POSITIONS[k];
   });
-  return pose;
+  return { targets, snapshot: null };
 }
 
 /** 조작 방향 → 대상 축 매핑 (기존 기능 = 좌우, 병합 기능 = 상하) */
@@ -367,6 +435,12 @@ export function axisForDirection(modeKey: ModeKey, direction: Direction): AxisKe
   if (!conf) return null;
   if (direction === 'up' || direction === 'down') return conf.udAxis;
   return conf.lrAxis;
+}
+
+/** 모드 대표 축 (표기·AUTO DEMO용 — 좌우 축 우선, 없으면 상하 축) */
+export function primaryAxis(modeKey: ModeKey): AxisKey {
+  const conf = MODE_CONFIG[modeKey];
+  return conf.lrAxis ?? conf.udAxis ?? 'tilt';
 }
 
 /**

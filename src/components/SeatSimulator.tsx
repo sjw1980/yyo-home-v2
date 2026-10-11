@@ -11,7 +11,8 @@ import {
   axisForDirection,
   clamp,
   lrSign,
-  relaxPoseAt,
+  primaryAxis,
+  relaxPreset,
   rotateMode,
   type AxisKey,
   type Direction,
@@ -37,21 +38,22 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const t = (key: string, fallback = '') => translations[key]?.[currentLang] ?? fallback;
 
   // ================= UI 상태 =================
-  const [mode, setMode] = useState<ModeKey>('tilt_legrest');
+  const [mode, setMode] = useState<ModeKey>('tilt');
   const [controlMode, setControlModeState] = useState<ControlMode>('manual');
   const [pressed, setPressed] = useState<Direction | null>(null);
   const [activeAxis, setActiveAxis] = useState<AxisKey | null>(null);
+  const [relaxOn, setRelaxOn] = useState(false);
   const [, setFrame] = useState(0);
 
   // ================= 시뮬레이션 상태 (ref) =================
   const posRef = useRef<Record<AxisKey, number>>({ ...INITIAL_POSITIONS });
   const tgtRef = useRef<Record<AxisKey, number>>({ ...INITIAL_POSITIONS });
   const pressRef = useRef<{ axis: AxisKey; dir: Direction } | null>(null);
-  const modeRef = useRef<ModeKey>('tilt_legrest');
+  const modeRef = useRef<ModeKey>('tilt');
   const controlModeRef = useRef<ControlMode>('manual');
   const langRef = useRef<'ko' | 'en'>(currentLang);
   const keyHeldRef = useRef<Set<string>>(new Set());
-  const relaxActiveRef = useRef(false);
+  const relaxSnapshotRef = useRef<Partial<Record<AxisKey, number>> | null>(null);
   const sectionRef = useRef<HTMLElement>(null);
   const demoRef = useRef<{
     phase: DemoPhase;
@@ -59,21 +61,27 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     targetMode: ModeKey;
     targetAxis: AxisKey;
     targetValue: number;
-  }>({ phase: 'idle', delay: 0, targetMode: 'tilt_legrest', targetAxis: 'tilt', targetValue: 50 });
+  }>({ phase: 'idle', delay: 0, targetMode: 'tilt', targetAxis: 'tilt', targetValue: 50 });
 
   langRef.current = currentLang;
 
   // ================= 공통 제어 =================
   /**
-   * 릴렉스 & 리턴 포즈 동기화 (M6 전용)
-   * 데스크톱 앱은 이미지 전환만 수행하나, 웹 버전에서는 릴렉스 %에 따라 7개 축이 실제 포즈로 이동한다.
-   * (조작 이력이 있을 때만 구동 → 모드 진입만으로 시트가 점프하지 않음)
+   * 릴렉스 On/Off 프리셋
+   *  On  : On 이전 값 스냅샷을 저장하고 RELAX_ON_TARGETS 로 이동 (릴렉스 100%)
+   *  Off : 스냅샷 값으로 복귀 (릴렉스 0%)
    */
-  const syncRelaxPose = () => {
-    if (!relaxActiveRef.current) return;
-    const pose = relaxPoseAt(posRef.current.relaxation_return / 100);
-    Object.assign(posRef.current, pose);
-    Object.assign(tgtRef.current, pose);
+  const applyRelaxPreset = (on: boolean) => {
+    pressRef.current = null;
+    setPressed(null);
+
+    const result = relaxPreset(posRef.current, relaxSnapshotRef.current, on);
+    Object.assign(tgtRef.current, result.targets);
+    relaxSnapshotRef.current = result.snapshot;
+
+    setRelaxOn(on);
+    setActiveAxis('relaxation_return');
+    setFrame((f) => f + 1);
   };
 
   /** 현재 조작 중단 (현재 위치를 타깃으로 고정) */
@@ -119,9 +127,10 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     controlModeRef.current = 'manual';
     setControlModeState('manual');
     stopMotion();
-    modeRef.current = 'tilt_legrest';
-    setMode('tilt_legrest');
-    relaxActiveRef.current = false;
+    modeRef.current = 'tilt';
+    setMode('tilt');
+    relaxSnapshotRef.current = null;
+    setRelaxOn(false);
     posRef.current = { ...INITIAL_POSITIONS };
     tgtRef.current = { ...INITIAL_POSITIONS };
     setFrame((f) => f + 1);
@@ -131,6 +140,9 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     // 수동 조작 시작 시 AUTO DEMO 정지
     if (controlModeRef.current === 'auto') setControlMode('manual');
 
+    // 릴렉스 모드는 방향 조작 대신 On/Off 프리셋을 사용한다
+    if (modeRef.current === 'relaxation') return;
+
     const axis = axisForDirection(modeRef.current, dir);
     if (!axis) return;
 
@@ -138,9 +150,14 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     if (prev && prev.dir !== dir) tgtRef.current[prev.axis] = posRef.current[prev.axis];
 
     pressRef.current = { axis, dir };
-    if (axis === 'relaxation_return') relaxActiveRef.current = true;
     setPressed(dir);
     setActiveAxis(axis);
+  };
+
+  /** 릴렉스 On/Off 버튼 (수동 조작 시작 시 AUTO DEMO 정지) */
+  const handleRelaxButton = (on: boolean) => {
+    if (controlModeRef.current === 'auto') setControlMode('manual');
+    applyRelaxPreset(on);
   };
 
   const handleRelease = () => stopMotion();
@@ -183,8 +200,15 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
       demo.targetMode = next;
       selectMode(next);
 
-      const conf = MODE_CONFIG[next];
-      const axis = conf.lrAxis;
+      // 릴렉스 모드는 축 조작 대신 On/Off 프리셋을 교대로 시연한다
+      if (next === 'relaxation') {
+        applyRelaxPreset(relaxSnapshotRef.current === null);
+        demo.phase = 'up_delay';
+        demo.delay = 2.5;
+        return;
+      }
+
+      const axis = primaryAxis(next);
       const confAxis = AXIS_CONFIG[axis];
       const range = confAxis.softMax - confAxis.softMin;
       demo.targetAxis = axis;
@@ -207,9 +231,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
         demo.delay = 2.0;
         return;
       }
-      const conf = MODE_CONFIG[demo.targetMode];
       const confAxis = AXIS_CONFIG[axis];
-      const step = confAxis.speed * dt * (conf.lrFine ? 0.35 : 1);
+      const step = confAxis.speed * dt;
       tgt[axis] = clamp(
         tgt[axis] + Math.sign(diff) * Math.max(step, Math.abs(diff)),
         confAxis.min,
@@ -238,9 +261,6 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
       // 하드 리밋 클램프
       pos[key] = clamp(pos[key], conf.min, conf.max);
     }
-
-    // 릴렉스 & 리턴 포즈 동기화
-    syncRelaxPose();
 
     // 조작 중 타깃 갱신 (ref: _execute_direction_step — 40ms 명령 스텝, 하드 리밋만 적용)
     const press = pressRef.current;
@@ -282,6 +302,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     if (keyMap[e.key]) {
       e.preventDefault();
       if (e.repeat) return;
+      // 릴렉스 모드: →/↑ = On, ←/↓ = Off (프리셋이라 홀드 조작 없음)
+      if (modeRef.current === 'relaxation') {
+        handleRelaxButton(e.key === 'ArrowRight' || e.key === 'ArrowUp');
+        return;
+      }
       keyHeldRef.current.add(e.key);
       handlePress(keyMap[e.key]);
       return;
@@ -310,7 +335,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const pos = posRef.current;
   const tgt = tgtRef.current;
   const modeConf = MODE_CONFIG[mode];
-  const focusAxis: AxisKey = activeAxis ?? modeConf.lrAxis;
+  const focusAxis: AxisKey = activeAxis ?? primaryAxis(mode);
   const focusConf = AXIS_CONFIG[focusAxis];
   const span = focusConf.max - focusConf.min;
   const pct = ((pos[focusAxis] - focusConf.min) / span) * 100;
@@ -322,42 +347,86 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     `${value.toFixed(AXIS_CONFIG[axis].unit === '°' ? 1 : 0)}${AXIS_CONFIG[axis].unit}`;
 
   /**
-   * 4-Way 디렉션 패드 버튼
+   * 모드 카드 안의 조작 버튼 — 모드에 필요한 방향 버튼만 카드 안에 배치한다.
    * (컴포넌트 대신 함수 호출로 렌더링 → 30ms 리렌더 시 리마운트/조작 유실 방지)
    */
-  const padButton = (dir: Direction, glyph: string) => {
-    const label = MODE_SPEC_LABELS[mode][dir];
-    const disabled = !label;
+  const modeButton = (modeKey: ModeKey, dir: Direction, glyph: string) => {
+    const label = MODE_SPEC_LABELS[modeKey][dir];
+    if (!label) return null;
+    const active = pressed === dir && mode === modeKey;
     return (
       <button
         key={dir}
         type="button"
-        disabled={disabled}
         onPointerDown={(e) => {
           e.preventDefault();
-          if (!disabled) handlePress(dir);
+          if (modeRef.current !== modeKey) selectMode(modeKey);
+          handlePress(dir);
         }}
-        onPointerUp={() => {
-          if (!disabled) handleRelease();
-        }}
+        onPointerUp={() => handleRelease()}
         onPointerLeave={() => {
-          if (pressed === dir) handleRelease();
+          if (active) handleRelease();
         }}
-        title={label ? label[currentLang] : '—'}
-        className={`h-16 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all select-none
+        title={label[currentLang]}
+        className={`flex-1 min-w-0 h-9 rounded-md border flex flex-col items-center justify-center gap-[1px] transition-all select-none
           ${
-            pressed === dir
-              ? 'bg-[#7dbaaf] text-[#0d1111] border-[#7dbaaf] shadow-lg'
-              : disabled
-                ? 'border-[#222c2a] text-[#2f3b38] cursor-not-allowed'
-                : 'border-[#313f3c] text-[#9bb09e] hover:border-[#7dbaaf]/60 hover:text-[#7dbaaf] cursor-pointer'
+            active
+              ? 'bg-[#7dbaaf] text-[#0d1111] border-[#7dbaaf] shadow'
+              : 'border-[#313f3c] text-[#9bb09e] hover:border-[#7dbaaf]/60 hover:text-[#7dbaaf] cursor-pointer'
           }`}
       >
-        <span className="text-sm leading-none">{glyph}</span>
-        <span className="text-[8.5px] leading-tight px-1 text-center">
-          {label ? label[currentLang] : '—'}
+        <span className="text-[10px] leading-none">{glyph}</span>
+        <span className="text-[7.5px] leading-none px-0.5 truncate max-w-full">
+          {label[currentLang]}
         </span>
       </button>
+    );
+  };
+
+  /** 릴렉스 모드용 On/Off 프리셋 버튼 (On = 릴렉션 포즈, Off = 직전 값 복귀) */
+  const relaxButton = (on: boolean) => {
+    const active = relaxOn === on;
+    return (
+      <button
+        key={on ? 'relax-on' : 'relax-off'}
+        type="button"
+        onClick={() => {
+          if (modeRef.current !== 'relaxation') selectMode('relaxation');
+          handleRelaxButton(on);
+        }}
+        title={on ? '릴렉션 포즈 적용' : '직전 값으로 복귀'}
+        className={`flex-1 h-9 rounded-md border flex flex-col items-center justify-center gap-[1px] transition-all select-none
+          ${
+            active
+              ? on
+                ? 'bg-[#e0b96a] text-[#0d1111] border-[#e0b96a] shadow'
+                : 'bg-[#7dbaaf] text-[#0d1111] border-[#7dbaaf] shadow'
+              : 'border-[#313f3c] text-[#9bb09e] hover:border-[#7dbaaf]/60 hover:text-[#7dbaaf] cursor-pointer'
+          }`}
+      >
+        <span className="text-[11px] leading-none">{on ? '⏻' : '↺'}</span>
+        <span className="text-[8px] leading-none font-bold">{on ? 'ON' : 'OFF'}</span>
+      </button>
+    );
+  };
+
+  /** 모드 카드 버튼 클러스터 — 릴렉스는 On/Off, 그 외 모드는 방향 버튼 */
+  const cardButtons = (modeKey: ModeKey) => {
+    if (modeKey === 'relaxation') {
+      return (
+        <>
+          {relaxButton(true)}
+          {relaxButton(false)}
+        </>
+      );
+    }
+    return (
+      <>
+        {modeButton(modeKey, 'up', '▲')}
+        {modeButton(modeKey, 'down', '▼')}
+        {modeButton(modeKey, 'left', '◀')}
+        {modeButton(modeKey, 'right', '▶')}
+      </>
     );
   };
 
@@ -393,7 +462,9 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
             <SlidersHorizontal className="w-4 h-4 text-[#7dbaaf] flex-shrink-0" />
             <div className="min-w-0">
               <p className="font-mono text-[9px] text-stone-600 tracking-wider">DPSS MODE</p>
-              <p className="text-xs font-bold text-slate-200 truncate">{modeConf.name[currentLang]}</p>
+              <p className="text-xs font-bold text-slate-200 truncate">
+                M{modeConf.status} · {modeConf.name[currentLang]}
+              </p>
             </div>
           </div>
           <div className="bg-[#080d0c] border border-[#313f3c]/60 rounded-xl px-4 py-3 flex items-center space-x-3">
@@ -422,35 +493,64 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-12 gap-6 items-start">
-          {/* ===== A. MODE SELECT + AXIS MONITOR ===== */}
-          <div className="lg:col-span-4 bg-[#080d0c] rounded-2xl border border-[#313f3c]/60 flex flex-col overflow-hidden shadow-2xl">
-            <div className="bg-[#131d1b] border-b border-[#313f3c]/60 px-5 py-3.5 flex items-center space-x-2">
+        {/* ===== 모드 셀렉터 (모드별로 필요한 조작 버튼을 카드 안에 배치) ===== */}
+        <div className="bg-[#080d0c] rounded-2xl border border-[#313f3c]/60 overflow-hidden shadow-2xl">
+          <div className="bg-[#131d1b] border-b border-[#313f3c]/60 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center space-x-2">
               <SlidersHorizontal className="w-4 h-4 text-[#7dbaaf]" />
               <span className="font-mono text-[11px] tracking-wider text-slate-200">
                 {t('Seat Mode Panel')}
               </span>
+              <span className="font-mono text-[9px] text-stone-600">{MODE_ORDER.length} MODES</span>
             </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setControlMode(controlMode === 'auto' ? 'manual' : 'auto')}
+                className={`h-8 px-3 rounded-lg border text-[10px] font-bold font-mono transition-all flex items-center space-x-1.5
+                  ${
+                    controlMode === 'auto'
+                      ? 'bg-[#e0b96a] text-[#0d1111] border-[#e0b96a]'
+                      : 'border-[#313f3c] text-stone-400 hover:border-[#e0b96a]/60 hover:text-[#e0b96a] cursor-pointer'
+                  }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>{controlMode === 'auto' ? 'AUTO DEMO ON' : 'AUTO DEMO'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={resetPose}
+                className="h-8 px-3 rounded-lg border border-[#313f3c] text-[10px] font-mono text-stone-400 hover:border-[#7dbaaf]/60 hover:text-[#7dbaaf] transition-all flex items-center space-x-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{t('Seat Reset Pose')}</span>
+              </button>
+            </div>
+          </div>
 
-            <div className="p-4 space-y-2">
-              {MODE_ORDER.map((key) => {
-                const conf = MODE_CONFIG[key];
-                const selected = mode === key;
-                return (
+          <div className="p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {MODE_ORDER.map((key) => {
+              const conf = MODE_CONFIG[key];
+              const selected = mode === key;
+              const lr = conf.lrAxis;
+              const ud = conf.udAxis;
+              return (
+                <div
+                  key={key}
+                  className={`rounded-xl border p-3 flex flex-col transition-all ${
+                    selected
+                      ? 'bg-[#12211e] border-[#7dbaaf] shadow-lg'
+                      : 'bg-[#0b1211] border-[#222c2a] hover:border-[#3d4d49]'
+                  }`}
+                >
                   <button
-                    key={key}
                     type="button"
                     onClick={() => selectMode(key)}
-                    className={`w-full text-left rounded-xl border px-3.5 py-3 transition-all
-                      ${
-                        selected
-                          ? 'bg-[#12211e] border-[#7dbaaf] shadow-lg'
-                          : 'bg-[#0b1211] border-[#222c2a] hover:border-[#3d4d49] cursor-pointer'
-                      }`}
+                    className="text-left cursor-pointer"
                   >
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1.5">
                       <span
-                        className={`font-mono text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 ${
+                        className={`font-mono text-[9.5px] px-1.5 py-0.5 rounded flex-shrink-0 ${
                           selected
                             ? 'bg-[#7dbaaf] text-[#0d1111] font-bold'
                             : 'bg-[#16211e] text-stone-500'
@@ -459,7 +559,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                         M{conf.status}
                       </span>
                       <span
-                        className={`text-[13px] font-bold truncate ${
+                        className={`text-[12px] font-bold truncate ${
                           selected ? 'text-slate-100' : 'text-stone-400'
                         }`}
                       >
@@ -467,211 +567,146 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                       </span>
                     </div>
                     <p
-                      className={`font-mono text-[9.5px] mt-1.5 truncate ${
+                      className={`font-mono text-[9px] mt-1.5 truncate ${
                         selected ? 'text-[#7dbaaf]' : 'text-stone-600'
                       }`}
                     >
-                      {conf.desc[currentLang]}
+                      {lr ? `${AXIS_CONFIG[lr].code} ${fmtAxis(lr, pos[lr])}` : ''}
+                      {lr && ud ? ' · ' : ''}
+                      {ud ? `${AXIS_CONFIG[ud].code} ${fmtAxis(ud, pos[ud])}` : ''}
                     </p>
                   </button>
-                );
-              })}
-            </div>
 
-            {/* ---- AXIS MONITOR ---- */}
-            <div className="px-4 pb-4 mt-auto">
-              <div className="border-t border-[#313f3c]/60 pt-3.5">
-                <p className="font-mono text-[10px] tracking-wider text-stone-500 mb-2.5">
-                  {t('Seat Axis Monitor')}
-                </p>
-                <div className="space-y-1.5">
-                  {AXIS_ORDER.map((key) => {
-                    const conf = AXIS_CONFIG[key];
-                    const value = pos[key];
-                    const ratio = clamp(((value - conf.min) / (conf.max - conf.min)) * 100, 0, 100);
-                    const isActive = activeAxis === key;
-                    return (
-                      <div key={key} className="flex items-center space-x-2">
-                        <span
-                          className={`w-[68px] text-[10px] truncate ${
-                            isActive ? 'text-[#7dbaaf] font-bold' : 'text-stone-500'
-                          }`}
-                        >
-                          {conf.name[currentLang]}
-                        </span>
-                        <div className="flex-1 h-1.5 rounded-full bg-[#101917] border border-[#222c2a] overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              isActive ? 'bg-[#7dbaaf]' : 'bg-[#3d4d49]'
-                            }`}
-                            style={{ width: `${ratio}%` }}
-                          />
-                        </div>
-                        <span
-                          className={`w-[52px] text-right font-mono text-[9.5px] ${
-                            isActive ? 'text-[#7dbaaf]' : 'text-stone-500'
-                          }`}
-                        >
-                          {fmtAxis(key, value)}
-                        </span>
-                      </div>
-                    );
-                  })}
+                  <div className="flex gap-1 mt-2.5">{cardButtons(key)}</div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
 
-          {/* ===== B. VIRTUAL SEAT PHYSICS MODEL ===== */}
-          <div className="lg:col-span-5 bg-[#080d0c] rounded-2xl border border-[#313f3c]/60 flex flex-col overflow-hidden shadow-2xl">
-            <div className="bg-[#131d1b] border-b border-[#313f3c]/60 px-5 py-3.5 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Armchair className="w-4 h-4 text-[#7dbaaf]" />
-                <span className="font-mono text-[11px] tracking-wider text-slate-200">
-                  {t('Seat Diagram Panel')}
-                </span>
-              </div>
-              <span className="font-mono text-[10px] text-[#7dbaaf]">
-                {focusConf.name[currentLang]} · {focusConf.code}
-              </span>
-            </div>
+          <p className="px-5 pb-4 text-[10px] text-stone-600 font-mono leading-relaxed">
+            {t('Seat Control Hint')}
+          </p>
+        </div>
 
-            <div className="flex-1 bg-[radial-gradient(circle_at_50%_35%,#0e1a17_0%,#050908_70%)] px-3 py-2">
-              <SeatDiagram positions={pos} targets={tgt} activeAxis={activeAxis} lang={currentLang} />
-            </div>
-
-            {/* ---- MOTION BAR (소프트 리밋 구간 / 타깃 / 현재 위치) ---- */}
-            <div className="border-t border-[#313f3c]/60 px-5 py-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-mono text-[9.5px] text-stone-500">
-                  {focusConf.min}
-                  {focusConf.unit}
-                </span>
-                <span className="font-mono text-[10px] text-stone-400">
-                  {activeAxis ? 'OPERATION' : 'IDLE'} · {focusConf.name[currentLang]}
-                </span>
-                <span className="font-mono text-[9.5px] text-stone-500">
-                  {focusConf.max}
-                  {focusConf.unit}
-                </span>
-              </div>
-              <div className="relative h-3 rounded-full bg-[#101917] border border-[#222c2a] overflow-hidden">
-                <div
-                  className="absolute inset-y-0 bg-[#16241f]"
-                  style={{ left: `${softLeft}%`, width: `${Math.max(softRight - softLeft, 0)}%` }}
-                />
-                <div
-                  className="absolute inset-y-0 w-[2px] bg-[#e0b96a]/80"
-                  style={{ left: `${clamp(tgtPct, 0, 100)}%` }}
-                />
-                <div
-                  className="absolute inset-y-0 left-0 bg-[#7dbaaf]/80 rounded-r"
-                  style={{ width: `${clamp(pct, 0, 100)}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between mt-2">
-                <span className="font-mono text-[9px] text-stone-600">
-                  SOFT {focusConf.softMin}
-                  {focusConf.unit} ~ {focusConf.softMax}
-                  {focusConf.unit}
-                </span>
-                <span className="font-mono text-[11px] text-[#7dbaaf] font-bold">
-                  {fmtAxis(focusAxis, pos[focusAxis])}
-                </span>
-              </div>
-              <p className="text-[10.5px] text-stone-500 mt-2.5 leading-relaxed">
-                {focusConf.desc[currentLang]}
-              </p>
-            </div>
-          </div>
-
-          {/* ===== C. CONTROL PANEL ===== */}
-          <div className="lg:col-span-3 bg-[#080d0c] rounded-2xl border border-[#313f3c]/60 flex flex-col overflow-hidden shadow-2xl">
-            <div className="bg-[#131d1b] border-b border-[#313f3c]/60 px-5 py-3.5 flex items-center space-x-2">
-              <Gauge className="w-4 h-4 text-[#7dbaaf]" />
+        {/* ===== 시트 물리 모델 + 실시간 모니터 ===== */}
+        <div className="mt-6 bg-[#080d0c] rounded-2xl border border-[#313f3c]/60 overflow-hidden shadow-2xl">
+          <div className="bg-[#131d1b] border-b border-[#313f3c]/60 px-5 py-3.5 flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Armchair className="w-4 h-4 text-[#7dbaaf]" />
               <span className="font-mono text-[11px] tracking-wider text-slate-200">
-                {t('Seat Control Panel')}
+                {t('Seat Diagram Panel')}
               </span>
             </div>
+            <span className="font-mono text-[10px] text-[#7dbaaf]">
+              {focusConf.name[currentLang]} · {focusConf.code}
+            </span>
+          </div>
 
-            <div className="p-5 flex-1 flex flex-col">
-              {/* 활성 축 표시 */}
-              <div className="bg-[#050908] border border-[#243029] rounded-lg px-3.5 py-3 mb-4">
-                <p className="font-mono text-[9px] text-stone-600 tracking-wider mb-1">
-                  CURRENT / TARGET
-                </p>
-                <div className="flex items-baseline justify-between">
-                  <span className="text-[13px] font-bold text-slate-100 truncate">
-                    {focusConf.name[currentLang]}
+          <div className="grid lg:grid-cols-12">
+            {/* ---- 시트 형상 + 모션 바 ---- */}
+            <div className="lg:col-span-8 flex flex-col">
+              <div className="flex-1 bg-[radial-gradient(circle_at_50%_35%,#0e1a17_0%,#050908_70%)] px-3 py-2">
+                <SeatDiagram
+                  positions={pos}
+                  targets={tgt}
+                  activeAxis={activeAxis}
+                  lang={currentLang}
+                />
+              </div>
+
+              <div className="border-t border-[#313f3c]/60 px-5 py-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-mono text-[9.5px] text-stone-500">
+                    {focusConf.min}
+                    {focusConf.unit}
                   </span>
-                  <span className="font-mono text-lg text-[#7dbaaf] font-bold leading-none">
+                  <span className="font-mono text-[10px] text-stone-400">
+                    {activeAxis ? 'OPERATION' : 'IDLE'} · {focusConf.name[currentLang]}
+                  </span>
+                  <span className="font-mono text-[9.5px] text-stone-500">
+                    {focusConf.max}
+                    {focusConf.unit}
+                  </span>
+                </div>
+                <div className="relative h-3 rounded-full bg-[#101917] border border-[#222c2a] overflow-hidden">
+                  <div
+                    className="absolute inset-y-0 bg-[#16241f]"
+                    style={{ left: `${softLeft}%`, width: `${Math.max(softRight - softLeft, 0)}%` }}
+                  />
+                  <div
+                    className="absolute inset-y-0 w-[2px] bg-[#e0b96a]/80"
+                    style={{ left: `${clamp(tgtPct, 0, 100)}%` }}
+                  />
+                  <div
+                    className="absolute inset-y-0 left-0 bg-[#7dbaaf]/80 rounded-r"
+                    style={{ width: `${clamp(pct, 0, 100)}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="font-mono text-[9px] text-stone-600">
+                    SOFT {focusConf.softMin}
+                    {focusConf.unit} ~ {focusConf.softMax}
+                    {focusConf.unit}
+                  </span>
+                  <span className="font-mono text-[11px] text-[#7dbaaf] font-bold">
                     {fmtAxis(focusAxis, pos[focusAxis])}
                   </span>
                 </div>
-                <p className="font-mono text-[9px] text-[#e0b96a] mt-1 text-right">
-                  TGT {fmtAxis(focusAxis, tgt[focusAxis])}
-                </p>
               </div>
+            </div>
 
-              {/* 4-Way 디렉션 패드 */}
-              <div className="grid grid-cols-3 gap-2">
-                <div />
-                {padButton('up', '▲')}
-                <div />
-                {padButton('left', '◀')}
-                <div className="h-16 flex items-center justify-center font-mono text-[9px] text-stone-600">
-                  4-WAY
-                </div>
-                {padButton('right', '▶')}
-                <div />
-                {padButton('down', '▼')}
-                <div />
-              </div>
-
-              <p className="font-mono text-[9.5px] text-stone-600 mt-3 leading-relaxed">
-                {modeConf.desc[currentLang]}
+            {/* ---- 실시간 모니터 (시트 패널 내부) ---- */}
+            <div className="lg:col-span-4 border-t lg:border-t-0 lg:border-l border-[#313f3c]/60 p-4">
+              <p className="font-mono text-[10px] tracking-wider text-stone-500 mb-3">
+                {t('Seat Axis Monitor')}
               </p>
-
-              {/* 제어 모드 전환 */}
-              <div className="grid grid-cols-2 gap-2 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setControlMode('manual')}
-                  className={`h-10 rounded-lg border text-[11px] font-bold font-mono transition-all
-                    ${
-                      controlMode === 'manual'
-                        ? 'bg-[#7dbaaf] text-[#0d1111] border-[#7dbaaf]'
-                        : 'border-[#313f3c] text-stone-400 hover:border-[#7dbaaf]/60 hover:text-[#7dbaaf] cursor-pointer'
-                    }`}
-                >
-                  MANUAL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setControlMode('auto')}
-                  className={`h-10 rounded-lg border text-[11px] font-bold font-mono transition-all flex items-center justify-center space-x-1.5
-                    ${
-                      controlMode === 'auto'
-                        ? 'bg-[#e0b96a] text-[#0d1111] border-[#e0b96a]'
-                        : 'border-[#313f3c] text-stone-400 hover:border-[#e0b96a]/60 hover:text-[#e0b96a] cursor-pointer'
-                    }`}
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>AUTO</span>
-                </button>
+              <div className="space-y-2">
+                {AXIS_ORDER.map((key) => {
+                  const conf = AXIS_CONFIG[key];
+                  const value = pos[key];
+                  const ratio = clamp(((value - conf.min) / (conf.max - conf.min)) * 100, 0, 100);
+                  const tRatio = clamp(((tgt[key] - conf.min) / (conf.max - conf.min)) * 100, 0, 100);
+                  const sMin = ((conf.softMin - conf.min) / (conf.max - conf.min)) * 100;
+                  const sMax = ((conf.softMax - conf.min) / (conf.max - conf.min)) * 100;
+                  const isActive = activeAxis === key;
+                  return (
+                    <div key={key} className="flex items-center space-x-2">
+                      <span
+                        className={`w-[70px] text-[10px] truncate ${
+                          isActive ? 'text-[#7dbaaf] font-bold' : 'text-stone-500'
+                        }`}
+                      >
+                        {conf.name[currentLang]}
+                      </span>
+                      <div className="flex-1 h-2 rounded-full bg-[#101917] border border-[#222c2a] overflow-hidden relative">
+                        <div
+                          className="absolute inset-y-0 bg-[#16241f]"
+                          style={{ left: `${sMin}%`, width: `${Math.max(sMax - sMin, 0)}%` }}
+                        />
+                        <div
+                          className={`absolute inset-y-0 left-0 rounded-r ${
+                            isActive ? 'bg-[#7dbaaf]/85' : 'bg-[#3d4d49]'
+                          }`}
+                          style={{ width: `${ratio}%` }}
+                        />
+                        <div
+                          className="absolute inset-y-0 w-[2px] bg-[#e0b96a]/80"
+                          style={{ left: `${tRatio}%` }}
+                        />
+                      </div>
+                      <span
+                        className={`w-[54px] text-right font-mono text-[9.5px] ${
+                          isActive ? 'text-[#7dbaaf]' : 'text-stone-500'
+                        }`}
+                      >
+                        {fmtAxis(key, value)}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-
-              <button
-                type="button"
-                onClick={resetPose}
-                className="mt-2 h-10 w-full rounded-lg border border-[#313f3c] text-[11px] font-mono text-stone-400 hover:border-[#7dbaaf]/60 hover:text-[#7dbaaf] transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>{t('Seat Reset Pose')}</span>
-              </button>
-
-              <p className="text-[10px] text-stone-600 font-mono leading-relaxed mt-auto pt-5">
-                {t('Seat Control Hint')}
+              <p className="text-[10.5px] text-stone-500 mt-4 leading-relaxed border-t border-[#313f3c]/40 pt-3">
+                {focusConf.desc[currentLang]}
               </p>
             </div>
           </div>

@@ -270,12 +270,29 @@ export default function SeatDiagram({ positions, targets, activeAxis, lang }: Se
         {partTag('lumber_height', PIVOT_X + 108, lumbarY + 44, 'start')}
       </g>
 
-      {/* 릴렉스 & 리턴 배지 */}
+      {/* 릴렉스 On/Off 배지 */}
       {activeAxis === 'relaxation_return' && (
         <g>
-          <rect x="196" y="34" width="168" height="34" rx="10" fill="#16211e" stroke="#7dbaaf" strokeWidth="1.6" />
-          <text x="280" y="56" textAnchor="middle" fontSize="12" fontFamily="monospace" fill="#7dbaaf" fontWeight="700">
-            {positions.relaxation_return > 50 ? 'RELAXATION MODE' : 'RETURN MODE'}{' '}
+          <rect
+            x="196"
+            y="34"
+            width="168"
+            height="34"
+            rx="10"
+            fill="#16211e"
+            stroke={positions.relaxation_return > 50 ? '#e0b96a' : '#7dbaaf'}
+            strokeWidth="1.6"
+          />
+          <text
+            x="280"
+            y="56"
+            textAnchor="middle"
+            fontSize="12"
+            fontFamily="monospace"
+            fill={positions.relaxation_return > 50 ? '#e0b96a' : '#7dbaaf'}
+            fontWeight="700"
+          >
+            RELAX {positions.relaxation_return > 50 ? 'ON' : 'OFF'}{' '}
             {positions.relaxation_return.toFixed(0)}%
           </text>
         </g>

@@ -338,8 +338,8 @@ export const translations: TranslationDictionary = {
     en: "DPSS Power Seat Control Simulator"
   },
   "Seat Simulator Subtitle": {
-    ko: "운전석 시트 조작기(DPSS)의 6개 조작 모드와 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 방향을 눌러 유지하면 시트 형상이 실시간으로 변화합니다.",
-    en: "Drive all 6 control modes and 10 seat axes through a virtual motor physics model — press and hold a direction and the seat geometry moves in real time."
+    ko: "운전석 시트 조작기(DPSS)의 9개 조작 모드와 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 모드 카드 안의 방향 버튼을 누른 채 유지하면 시트 형상이 실시간으로 변화합니다.",
+    en: "Drive all 9 control modes and 10 seat axes through a virtual motor physics model — press and hold a direction button inside a mode card and the seat geometry moves in real time."
   },
   "Seat Mode Panel": {
     ko: "조작 모드 선택 (MODE SELECT)",
@@ -349,17 +349,13 @@ export const translations: TranslationDictionary = {
     ko: "가상 시트 물리 모델 (SEAT PHYSICS)",
     en: "VIRTUAL SEAT PHYSICS MODEL"
   },
-  "Seat Control Panel": {
-    ko: "조작 패널 (CONTROL)",
-    en: "CONTROL PANEL"
-  },
   "Seat Axis Monitor": {
     ko: "전 축 실시간 모니터 (AXIS MONITOR)",
     en: "LIVE AXIS MONITOR"
   },
   "Seat Control Hint": {
-    ko: "패드를 누른 상태로 유지하면 해당 방향으로 연속 조작됩니다. 패널을 클릭한 뒤 방향키(4-Way) · Q·E(모드 전환) · Space(AUTO DEMO)로도 조작할 수 있습니다.",
-    en: "Press and hold a pad button to drive that direction continuously. Focus the panel and use Arrow keys (4-Way) · Q·E (change mode) · Space (AUTO DEMO)."
+    ko: "모드 카드 안의 방향 버튼을 누른 상태로 유지하면 해당 축이 연속 조작되며, 다른 모드의 버튼을 누르면 해당 모드로 자동 전환됩니다. 릴렉스 모드는 On(릴렉션 포즈 적용) / Off(직전 값 복귀) 버튼으로 조작됩니다. 패널을 클릭한 뒤 방향키 · Q·E(모드 전환) · Space(AUTO DEMO)로도 조작할 수 있습니다.",
+    en: "Press and hold a direction button inside a mode card to drive that axis; pressing a button of another mode switches to it automatically. The Relax mode uses On (apply relax pose) / Off (restore previous values). Focus the panel and use Arrow keys · Q·E (change mode) · Space (AUTO DEMO)."
   },
   "Seat Reset Pose": {
     ko: "전 축 초기 위치로 리셋",
