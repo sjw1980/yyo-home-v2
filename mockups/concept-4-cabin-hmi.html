@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Concept 04 — Cabin HMI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{
+    font-family:'Rajdhani','Noto Sans KR',sans-serif;
+    background:#0a0d0f;color:#e8eef0;padding:0;display:flex;flex-direction:column;
+  }
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(80% 60% at 50% 108%, rgba(240,165,60,.16), transparent 70%),
+               radial-gradient(60% 50% at 8% 0%, rgba(60,90,86,.35), transparent 70%);}
+  /* ── 상단 스테이터스 바 ── */
+  .bar{height:62px;display:flex;align-items:center;gap:26px;padding:0 34px;
+    border-bottom:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.02);position:relative;z-index:2}
+  .bar .mod{font-size:12px;letter-spacing:.3em;color:#7f8f92;text-transform:uppercase}
+  .bar .veh{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;letter-spacing:.14em;color:#fff}
+  .bar .sp{flex:1}
+  .chip{display:flex;align-items:center;gap:8px;font-size:13.5px;letter-spacing:.12em;color:#a9b7b9}
+  .chip i{width:7px;height:7px;border-radius:50%;background:#f0a53c;box-shadow:0 0 10px #f0a53c}
+  .chip.ok i{background:#5fd6a4;box-shadow:0 0 10px #5fd6a4}
+  .clock{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:600;letter-spacing:.1em;color:#fff}
+  /* ── 본문 3열 ── */
+  .grid{flex:1;display:grid;grid-template-columns:296px 1fr 320px;gap:1px;background:rgba(255,255,255,.07);position:relative;z-index:1}
+  .col{background:#0a0d0f;padding:24px 24px 18px;display:flex;flex-direction:column}
+  .ttl{font-size:11px;letter-spacing:.32em;color:#6f7f82;text-transform:uppercase;margin-bottom:16px}
+  /* 좌측 액추에이터 목록 */
+  .ax{display:flex;align-items:center;gap:10px;padding:12px 12px;border-radius:12px;margin-bottom:9px;
+    background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}
+  .ax .ic{width:32px;height:32px;flex:none;border-radius:9px;border:1px solid rgba(255,255,255,.14);
+    display:grid;place-items:center;color:#9fb0b2}
+  .ax .nm{flex:1;font-size:14.5px;font-weight:600;letter-spacing:.02em;color:#d6e0e1;white-space:nowrap}
+  .ax .sub{font-size:11px;letter-spacing:.14em;color:#6f7f82;text-transform:uppercase;white-space:nowrap}
+  .ax .val{font-family:'Barlow Condensed',sans-serif;font-size:24px;font-weight:700;color:#fff;line-height:1}
+  .ax .val small{font-size:13px;color:#8d9c9e;font-weight:600;margin-left:2px}
+  .ax.run{background:linear-gradient(90deg,rgba(240,165,60,.16),rgba(240,165,60,.02));border-color:rgba(240,165,60,.5)}
+  .ax.run .ic{border-color:rgba(240,165,60,.7);color:#f0a53c;box-shadow:0 0 14px rgba(240,165,60,.25) inset}
+  .ax.run .val{color:#ffc276}
+  .ax.lim{opacity:.45}
+  .stepper{display:flex;gap:5px}
+  .stepper b{width:22px;height:22px;border-radius:6px;border:1px solid rgba(255,255,255,.16);display:grid;place-items:center;
+    font-size:13px;font-weight:600;color:#b9c6c7}
+  /* 중앙 스테이지 */
+  .stage{position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    background:radial-gradient(70% 60% at 50% 62%, #131a1d 0%, #0a0d0f 78%)}
+  .stage .hud{position:absolute;top:20px;left:24px;font-size:11.5px;letter-spacing:.28em;color:#6f7f82}
+  .stage .hud b{color:#f0a53c;font-weight:600}
+  .readout{position:absolute;top:16px;right:24px;text-align:right}
+  .readout .k{font-size:11px;letter-spacing:.28em;color:#6f7f82}
+  .readout .v{font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:700;line-height:.95;color:#fff}
+  .readout .v span{color:#f0a53c}
+  .readout .u{font-size:13px;letter-spacing:.2em;color:#8d9c9e}
+  .banner{position:absolute;bottom:96px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;
+    padding:9px 20px;border-radius:999px;background:rgba(240,165,60,.12);border:1px solid rgba(240,165,60,.45);
+    font-size:13.5px;letter-spacing:.2em;color:#ffc276;text-transform:uppercase}
+  .banner i{width:8px;height:8px;border-radius:50%;background:#f0a53c;box-shadow:0 0 12px #f0a53c}
+  /* 하단 독 */
+  .dock{position:absolute;bottom:18px;left:24px;right:24px;height:58px;border-radius:14px;
+    background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09);display:flex;align-items:center;
+    gap:10px;padding:0 14px;backdrop-filter:blur(8px)}
+  .dk{display:flex;align-items:center;gap:9px;padding:8px 14px;border-radius:10px;font-size:13px;letter-spacing:.16em;
+    color:#93a2a4;text-transform:uppercase;white-space:nowrap}
+  .dk.on{background:rgba(255,255,255,.1);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+  .dk.mem{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:700;letter-spacing:.06em}
+  .dock .sp{flex:1}
+  /* 우측 다이얼 */
+  .dial{display:flex;flex-direction:column;align-items:center;padding:6px 0 10px}
+  .mini{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;width:100%}
+  .mb{padding:9px 11px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+  .mb .k{font-size:10.5px;letter-spacing:.2em;color:#6f7f82;text-transform:uppercase}
+  .mb .v{font-family:'Barlow Condensed',sans-serif;font-size:23px;font-weight:700;color:#e9f1f2;margin-top:3px}
+  .mb .v small{font-size:12px;color:#8d9c9e}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <div class="veh">YYO&nbsp;·&nbsp;SEAT&nbsp;CONTROL</div>
+    <div class="mod">Driver&nbsp;·&nbsp;Row&nbsp;1</div>
+    <div class="sp"></div>
+    <div class="chip ok"><i></i>Ignition&nbsp;ON</div>
+    <div class="chip"><i></i>M4&nbsp;TILT&nbsp;RUN</div>
+    <div class="chip ok"><i></i>CAN&nbsp;50&nbsp;Hz</div>
+    <div class="clock">14:32</div>
+  </div>
+
+  <div class="grid">
+    <!-- 좌측: 액추에이터 -->
+    <div class="col">
+      <div class="ttl">Actuators</div>
+      <div class="ax">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 17h16M7 17V9h10v8"/></svg></div>
+        <div><div class="nm">슬라이드</div><div class="sub">M1 · HALL</div></div>
+        <div class="val">150<small>mm</small></div>
+      </div>
+      <div class="ax">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 19h14M8 19v-5h8v5M12 14V6"/></svg></div>
+        <div><div class="nm">하이프트</div><div class="sub">M2 · MOTOR</div></div>
+        <div class="val">50<small>mm</small></div>
+      </div>
+      <div class="ax run">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 18h9l6-11"/><path d="M4 18v-4"/></svg></div>
+        <div><div class="nm">시트 틸트</div><div class="sub">M4 · RUNNING</div></div>
+        <div class="stepper"><b>−</b><b>+</b></div>
+        <div class="val">7.5<small>°</small></div>
+      </div>
+      <div class="ax">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 19h12M8 19l3-9h6l-2 9"/></svg></div>
+        <div><div class="nm">레그레스트</div><div class="sub">M5 · MOTOR</div></div>
+        <div class="val">22.0<small>°</small></div>
+      </div>
+      <div class="ax">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M7 19h10M9 19l1-13h5l-1 13"/></svg></div>
+        <div><div class="nm">럼버</div><div class="sub">M6 · PUMP</div></div>
+        <div class="val">+18<small>mm</small></div>
+      </div>
+      <div class="ax lim">
+        <div class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 18h12M9 18V8a3 3 0 0 1 6 0v10"/></svg></div>
+        <div><div class="nm">헤드레스트</div><div class="sub">M7 · LOCKED</div></div>
+        <div class="val">4<small>way</small></div>
+      </div>
+      <div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">
+        <div class="ttl" style="margin-bottom:10px">Safety Interlock</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <div class="dk on" style="background:rgba(95,214,164,.14);color:#8fe6c2">VSS&nbsp;&lt;&nbsp;3&nbsp;km/h</div>
+          <div class="dk">OBS&nbsp;CLEAR</div><div class="dk">THERM&nbsp;OK</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 중앙: 라인아트 시트 -->
+    <div class="col stage">
+      <div class="hud">LIVE GEOMETRY &nbsp;·&nbsp; <b>AXIS M4 TILT</b> &nbsp;·&nbsp; TARGET 12.0°</div>
+      <div class="readout">
+        <div class="k">ACTIVE AXIS</div>
+        <div class="v">7<span>.5</span></div>
+        <div class="u">DEG &nbsp;/&nbsp; TILT</div>
+      </div>
+
+      <svg width="760" height="620" viewBox="0 0 760 620">
+        <defs>
+          <linearGradient id="fade" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#dfeceb" stop-opacity=".16"/>
+            <stop offset="1" stop-color="#dfeceb" stop-opacity=".02"/>
+          </linearGradient>
+          <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ffd39a"/><stop offset="1" stop-color="#f0a53c"/>
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <!-- 배경 기준선 -->
+        <g stroke="rgba(255,255,255,.07)" stroke-width="1">
+          <line x1="60" y1="520" x2="700" y2="520"/><line x1="60" y1="520" x2="60" y2="60"/><line x1="700" y1="520" x2="700" y2="60"/>
+        </g>
+        <g stroke="rgba(255,255,255,.05)" stroke-width="1" stroke-dasharray="3 7">
+          <line x1="380" y1="60" x2="380" y2="520"/><line x1="60" y1="290" x2="700" y2="290"/>
+        </g>
+        <text x="66" y="78" font-family="Rajdhani,sans-serif" font-size="11" letter-spacing="3" fill="#5d6c6f">R · Z REFERENCE</text>
+
+        <g transform="translate(-30,50) scale(.95)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <!-- 레일 -->
+          <g stroke="rgba(255,255,255,.34)" stroke-width="2">
+            <path d="M240 470 H710"/><path d="M240 484 H710"/>
+            <path d="M256 470 v14 M316 470 v14 M376 470 v14 M436 470 v14 M496 470 v14 M556 470 v14 M616 470 v14 M676 470 v14"/>
+          </g>
+          <!-- 팬티그래프 -->
+          <g stroke="rgba(255,255,255,.42)" stroke-width="3">
+            <line x1="404" y1="466" x2="556" y2="414"/><line x1="556" y1="466" x2="404" y2="414"/>
+            <path d="M392 404 H568"/>
+          </g>
+          <!-- 레그레스트 -->
+          <g transform="rotate(16, 300, 414)" stroke="rgba(255,255,255,.55)" stroke-width="2.4">
+            <rect x="168" y="394" width="140" height="36" rx="17"/><rect x="158" y="384" width="30" height="56" rx="14"/>
+          </g>
+          <!-- 쿠션 -->
+          <g transform="rotate(-4, 566, 342)">
+            <path d="M566 336 L372 342 C320 345 288 354 278 376 C268 398 288 410 320 410 L548 412
+                     C574 412 582 400 582 380 L582 352 C582 340 578 336 566 336 Z"
+                  stroke="rgba(255,255,255,.62)" stroke-width="2.4" fill="url(#fade)"/>
+            <path d="M360 348 V408 M420 350 V408 M480 348 V408" stroke="rgba(255,255,255,.16)" stroke-width="1.6"/>
+          </g>
+          <!-- 등받이 타겟(고스트) -->
+          <g transform="rotate(16, 566, 342)" stroke="rgba(240,165,60,.42)" stroke-width="1.8" stroke-dasharray="6 6">
+            <path d="M552 342 L592 164 C596 132 616 120 642 120 C670 120 688 136 684 166 L646 342 Z"/>
+            <rect x="596" y="34" width="112" height="72" rx="30"/>
+          </g>
+          <!-- 등받이 현재(활성) -->
+          <g transform="rotate(9, 566, 342)">
+            <path d="M552 342 L592 164 C596 132 616 120 642 120 C670 120 688 136 684 166 L646 342 Z"
+                  stroke="url(#amber)" stroke-width="3" fill="rgba(240,165,60,.07)" filter="url(#glow)"/>
+            <path d="M546 336 L586 170 C589 144 604 132 622 130 L626 154 C612 158 602 170 600 186 L568 336 Z"
+                  stroke="rgba(255,255,255,.34)" stroke-width="1.8"/>
+            <ellipse cx="566" cy="268" rx="15" ry="40" stroke="rgba(255,255,255,.4)" stroke-width="1.8"/>
+            <rect x="596" y="34" width="112" height="72" rx="30" stroke="rgba(255,255,255,.55)" stroke-width="2.4"/>
+            <path d="M612 96 V126 M650 98 V126" stroke="rgba(255,255,255,.3)" stroke-width="2"/>
+          </g>
+          <!-- 힌지 노드 -->
+          <g fill="#0a0d0f" stroke="#f0a53c" stroke-width="2.4">
+            <circle cx="566" cy="342" r="8"/><circle cx="300" cy="414" r="6"/>
+          </g>
+          <g fill="none" stroke="rgba(255,255,255,.3)" stroke-width="1.6" stroke-dasharray="4 5">
+            <path d="M600 342 A 60 60 0 0 0 592 288"/><path d="M288 366 A 96 96 0 0 1 330 336"/>
+          </g>
+        </g>
+
+        <!-- 노드 라벨 -->
+        <g font-family="Rajdhani,sans-serif" font-size="12" letter-spacing="2.4" fill="#8d9c9e">
+          <g stroke="rgba(255,255,255,.22)" stroke-width="1">
+            <path d="M508 375 L570 424 H600"/><path d="M252 447 L214 468 H172"/>
+            <path d="M206 498 L176 516 H136"/><path d="M640 128 H672"/>
+          </g>
+          <text x="606" y="418">P1 · PIVOT</text><text x="112" y="472">P2 · LEG</text>
+          <text x="76" y="520">R1 · RAIL</text><text x="678" y="132">S2 · BACK</text>
+        </g>
+      </svg>
+
+      <div class="banner"><i></i>M4 TILT RUNNING &nbsp;·&nbsp; 7.5° → 12.0°</div>
+
+      <div class="dock">
+        <div class="dk on">DRIVER</div><div class="dk">PASSENGER</div><div class="dk">ROW 2</div>
+        <div class="sp"></div>
+        <div class="dk mem on">1</div><div class="dk mem">2</div><div class="dk mem">3</div>
+        <div class="sp"></div>
+        <div class="dk">AUTO&nbsp;POSITION</div><div class="dk">INIT</div>
+      </div>
+    </div>
+    <!-- 우측: 다이얼 + 미니값 -->
+    <div class="col">
+      <div class="ttl">Recline Dial</div>
+      <div class="dial">
+        <svg width="188" height="188" viewBox="0 0 252 252">
+          <defs>
+            <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#f0a53c"/><stop offset="1" stop-color="#ffd9a3"/>
+            </linearGradient>
+          </defs>
+          <circle cx="126" cy="126" r="104" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+          <!-- 눈금 -->
+          <g stroke="rgba(255,255,255,.22)" stroke-width="1.4">
+            <line x1="126" y1="26" x2="126" y2="40"/><line x1="176" y1="41" x2="169" y2="53"/>
+            <line x1="211" y1="76" x2="199" y2="83"/><line x1="226" y1="126" x2="212" y2="126"/>
+            <line x1="76" y1="41" x2="83" y2="53"/><line x1="41" y1="76" x2="53" y2="83"/>
+            <line x1="26" y1="126" x2="40" y2="126"/>
+          </g>
+          <!-- 트랙 -->
+          <path d="M40 196 A 104 104 0 1 1 212 196" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="12" stroke-linecap="round"/>
+          <!-- 현재값 (32.5 / 45) -->
+          <path d="M40 196 A 104 104 0 1 1 197 62" fill="none" stroke="url(#arc)" stroke-width="12" stroke-linecap="round"/>
+          <!-- 타겟 마커 -->
+          <g><line x1="205" y1="52" x2="222" y2="40" stroke="#5fd6a4" stroke-width="2.6"/>
+             <circle cx="222" cy="40" r="4" fill="#5fd6a4"/></g>
+          <!-- 바늘 -->
+          <g transform="rotate(100, 126, 126)">
+            <path d="M126 28 L132 66 L120 66 Z" fill="#fff"/>
+          </g>
+          <circle cx="126" cy="126" r="9" fill="#0a0d0f" stroke="#fff" stroke-width="2.4"/>
+          <text x="126" y="120" text-anchor="middle" font-family="Barlow Condensed,sans-serif" font-size="58" font-weight="700" fill="#fff">32.5</text>
+          <text x="126" y="146" text-anchor="middle" font-family="Rajdhani,sans-serif" font-size="12" letter-spacing="4" fill="#8d9c9e">DEG</text>
+          <text x="126" y="176" text-anchor="middle" font-family="Rajdhani,sans-serif" font-size="12" letter-spacing="2.6" fill="#5fd6a4">TARGET 40.0°</text>
+          <text x="34" y="216" font-family="Rajdhani,sans-serif" font-size="11" letter-spacing="2" fill="#5d6c6f">0°</text>
+          <text x="200" y="216" font-family="Rajdhani,sans-serif" font-size="11" letter-spacing="2" fill="#5d6c6f">45°</text>
+        </svg>
+      </div>
+
+      <div class="mini">
+        <div class="mb"><div class="k">Tilt</div><div class="v">7.5<small>°</small></div></div>
+        <div class="mb"><div class="k">Legrest</div><div class="v">22.0<small>°</small></div></div>
+        <div class="mb"><div class="k">Lumbar</div><div class="v">+18<small>mm</small></div></div>
+        <div class="mb"><div class="k">Cushion</div><div class="v">42<small>mm</small></div></div>
+      </div>
+
+      <div class="ttl" style="margin:20px 0 10px">Sequence Log</div>
+      <div style="font-family:'Rajdhani',sans-serif;font-size:12.5px;color:#9fb0b2;line-height:1.6">
+        <div><span style="color:#5d6c6f">14:31:58</span>&nbsp; M5 LEGREST&nbsp; 0.0 → 22.0°</div>
+        <div><span style="color:#5d6c6f">14:32:04</span>&nbsp; M2 HEIGHT&nbsp;&nbsp; 30 → 50 mm</div>
+        <div><span style="color:#5d6c6f">14:32:11</span>&nbsp; M1 SLIDE&nbsp;&nbsp;&nbsp; 90 → 150 mm</div>
+        <div style="color:#ffc276"><span style="color:#a3763c">14:32:19</span>&nbsp; M4 TILT&nbsp;&nbsp;&nbsp;&nbsp; RUNNING…</div>
+      </div>
+
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:12px;
+             background:rgba(240,165,60,.1);border:1px solid rgba(240,165,60,.4)">
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:700;color:#ffd9a3">RELAX 프리셋 실행</div>
+            <div style="font-size:12px;letter-spacing:.14em;color:#a3895f;margin-top:2px">5 AXES · ETA 6.4 s</div>
+          </div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:700;color:#fff">64%</div>
+        </div>
+        <div style="height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden">
+          <div style="width:64%;height:100%;background:linear-gradient(90deg,#f0a53c,#ffd9a3)"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+
+
