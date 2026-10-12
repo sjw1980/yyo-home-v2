@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { Armchair, Gauge, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
+import { Armchair, RotateCcw, SlidersHorizontal, Zap } from 'lucide-react';
 import SeatDiagram from './SeatDiagram';
 import {
   AXIS_CONFIG,
@@ -8,6 +8,7 @@ import {
   MODE_CONFIG,
   MODE_ORDER,
   MODE_SPEC_LABELS,
+  RELAX_ON_AXES,
   axisForDirection,
   clamp,
   lrSign,
@@ -54,6 +55,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const langRef = useRef<'ko' | 'en'>(currentLang);
   const keyHeldRef = useRef<Set<string>>(new Set());
   const relaxSnapshotRef = useRef<Partial<Record<AxisKey, number>> | null>(null);
+  /**
+   * 릴렉스 On/Off 프리셋으로 "이동 중"인 축集合
+   * — 타깃(노란) 마커는 이 축들에 대해서만 표시한다 (수동/AUTO 조작 중에는 목표=현재라 무의미)
+   */
+  const relaxAxesRef = useRef<Set<AxisKey>>(new Set());
   const sectionRef = useRef<HTMLElement>(null);
   const demoRef = useRef<{
     phase: DemoPhase;
@@ -78,6 +84,14 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     const result = relaxPreset(posRef.current, relaxSnapshotRef.current, on);
     Object.assign(tgtRef.current, result.targets);
     relaxSnapshotRef.current = result.snapshot;
+
+    // 이동이 실제로 발생하는 축만 타깃 마커 대상으로 등록 (Off 시 스냅샷 복귀 구간 포함)
+    const moving = new Set<AxisKey>();
+    ([...RELAX_ON_AXES, 'relaxation_return'] as AxisKey[]).forEach((k) => {
+      const target = result.targets[k];
+      if (target !== undefined && Math.abs(target - posRef.current[k]) > 0.05) moving.add(k);
+    });
+    relaxAxesRef.current = moving;
 
     setRelaxOn(on);
     setActiveAxis('relaxation_return');
@@ -130,6 +144,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     modeRef.current = 'tilt';
     setMode('tilt');
     relaxSnapshotRef.current = null;
+    relaxAxesRef.current = new Set();
     setRelaxOn(false);
     posRef.current = { ...INITIAL_POSITIONS };
     tgtRef.current = { ...INITIAL_POSITIONS };
@@ -139,6 +154,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const handlePress = (dir: Direction) => {
     // 수동 조작 시작 시 AUTO DEMO 정지
     if (controlModeRef.current === 'auto') setControlMode('manual');
+    // 수동 조작 구간에서는 타깃 마커를 표시하지 않는다
+    relaxAxesRef.current = new Set();
 
     // 릴렉스 모드는 방향 조작 대신 On/Off 프리셋을 사용한다
     if (modeRef.current === 'relaxation') return;
@@ -262,6 +279,13 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
       pos[key] = clamp(pos[key], conf.min, conf.max);
     }
 
+    // 릴렉스 프리셋 이동을 완료한 축은 타깃 마커 대상에서 제외
+    if (relaxAxesRef.current.size > 0) {
+      relaxAxesRef.current.forEach((k) => {
+        if (Math.abs(tgt[k] - pos[k]) < 0.05) relaxAxesRef.current.delete(k);
+      });
+    }
+
     // 조작 중 타깃 갱신 (ref: _execute_direction_step — 40ms 명령 스텝, 하드 리밋만 적용)
     const press = pressRef.current;
     if (press && controlModeRef.current === 'manual') {
@@ -334,7 +358,6 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   // ================= 렌더 계산 =================
   const pos = posRef.current;
   const tgt = tgtRef.current;
-  const modeConf = MODE_CONFIG[mode];
   const focusAxis: AxisKey = activeAxis ?? primaryAxis(mode);
   const focusConf = AXIS_CONFIG[focusAxis];
   const span = focusConf.max - focusConf.min;
@@ -345,6 +368,18 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
 
   const fmtAxis = (axis: AxisKey, value: number) =>
     `${value.toFixed(AXIS_CONFIG[axis].unit === '°' ? 1 : 0)}${AXIS_CONFIG[axis].unit}`;
+
+  /**
+   * 타깃 마커(2px)의 left 위치
+   * — 트랙이 overflow-hidden 이라 0%/100% 에선 마커가 통째로 잘려 보이지 않는다.
+   *    (마커 폭의 절반만큼 안쪽으로 당겨 양 끝에서도 항상 보이게 한다)
+   */
+  const markerLeft = (valuePct: number) => {
+    const p = clamp(valuePct, 0, 100);
+    if (p <= 0) return '0%';
+    if (p >= 100) return 'calc(100% - 2px)';
+    return `calc(${p.toFixed(2)}% - 1px)`;
+  };
 
   /**
    * 모드 카드 안의 조작 버튼 — 모드에 필요한 방향 버튼만 카드 안에 배치한다.
@@ -454,43 +489,6 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
           <p className="text-slate-400 max-w-3xl mx-auto leading-relaxed text-sm md:text-base">
             {t('Seat Simulator Subtitle')}
           </p>
-        </div>
-
-        {/* ================= 상태 스트립 ================= */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-          <div className="bg-[#080d0c] border border-[#313f3c]/60 rounded-xl px-4 py-3 flex items-center space-x-3">
-            <SlidersHorizontal className="w-4 h-4 text-[#7dbaaf] flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="font-mono text-[9px] text-stone-600 tracking-wider">DPSS MODE</p>
-              <p className="text-xs font-bold text-slate-200 truncate">
-                M{modeConf.status} · {modeConf.name[currentLang]}
-              </p>
-            </div>
-          </div>
-          <div className="bg-[#080d0c] border border-[#313f3c]/60 rounded-xl px-4 py-3 flex items-center space-x-3">
-            <Gauge className="w-4 h-4 text-[#7dbaaf] flex-shrink-0" />
-            <div className="min-w-0">
-              <p className="font-mono text-[9px] text-stone-600 tracking-wider">CONTROL MODE</p>
-              <p
-                className={`text-xs font-bold truncate ${
-                  controlMode === 'auto' ? 'text-[#e0b96a]' : 'text-slate-200'
-                }`}
-              >
-                {controlMode === 'auto' ? 'AUTO DEMO' : 'MANUAL'}
-              </p>
-            </div>
-          </div>
-          <div className="bg-[#080d0c] border border-[#313f3c]/60 rounded-xl px-4 py-3 flex items-center space-x-3">
-            <Armchair className="w-4 h-4 text-[#7dbaaf] flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-mono text-[9px] text-stone-600 tracking-wider">ACTIVE AXIS</p>
-              <p className="text-xs font-bold text-slate-200 truncate">
-                {focusConf.name[currentLang]}{' '}
-                <span className="font-mono text-[#7dbaaf]">{fmtAxis(focusAxis, pos[focusAxis])}</span>
-              </p>
-            </div>
-            <span className="font-mono text-[9px] text-stone-600 flex-shrink-0">{focusConf.code}</span>
-          </div>
         </div>
 
         {/* ===== 모드 셀렉터 (모드별로 필요한 조작 버튼을 카드 안에 배치) ===== */}
@@ -634,13 +632,16 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                     style={{ left: `${softLeft}%`, width: `${Math.max(softRight - softLeft, 0)}%` }}
                   />
                   <div
-                    className="absolute inset-y-0 w-[2px] bg-[#e0b96a]/80"
-                    style={{ left: `${clamp(tgtPct, 0, 100)}%` }}
-                  />
-                  <div
                     className="absolute inset-y-0 left-0 bg-[#7dbaaf]/80 rounded-r"
                     style={{ width: `${clamp(pct, 0, 100)}%` }}
                   />
+                  {/* 타깃 마커 — 릴렉스 프리셋 이동 중에만 (채워진 바 위에 올려 가려지지 않게 한다) */}
+                  {relaxAxesRef.current.has(focusAxis) && (
+                    <div
+                      className="absolute inset-y-0 w-[2px] bg-[#e0b96a]"
+                      style={{ left: markerLeft(tgtPct) }}
+                    />
+                  )}
                 </div>
                 <div className="flex items-center justify-between mt-2">
                   <span className="font-mono text-[9px] text-stone-600">
@@ -689,10 +690,13 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                           }`}
                           style={{ width: `${ratio}%` }}
                         />
-                        <div
-                          className="absolute inset-y-0 w-[2px] bg-[#e0b96a]/80"
-                          style={{ left: `${tRatio}%` }}
-                        />
+                        {/* 타깃 마커 — 릴렉스 On/Off 프리셋으로 이동 중인 축만 표시 */}
+                        {relaxAxesRef.current.has(key) && (
+                          <div
+                            className="absolute inset-y-0 w-[2px] bg-[#e0b96a]"
+                            style={{ left: markerLeft(tRatio) }}
+                          />
+                        )}
                       </div>
                       <span
                         className={`w-[54px] text-right font-mono text-[9.5px] ${
