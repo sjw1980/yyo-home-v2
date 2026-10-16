@@ -163,7 +163,10 @@ export const AXIS_CONFIG: Record<AxisKey, AxisConfig> = {
     softMin: 5,
     softMax: 35,
     speed: 10,
-    desc: { ko: '사이드 볼스터 밀착 정도를 조절합니다.', en: 'Inflates the side bolster support.' },
+    desc: {
+      ko: '등받이 좌우 볼스터가 상체를 감싸는 정도를 조절합니다.',
+      en: 'Closes the backrest side bolsters around the torso.',
+    },
   },
   lumber: {
     key: 'lumber',
@@ -240,18 +243,18 @@ export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {
     status: 3,
     name: { ko: '쿠션 익스텐션', en: 'Cushion Extension' },
     subName: 'Cushion Extension Control',
-    lrAxis: null,
-    udAxis: 'cushion',
-    desc: { ko: '상하: 쿠션 길이 조작', en: 'U/D: cushion length' },
+    lrAxis: 'cushion',
+    udAxis: null,
+    desc: { ko: '좌우: 쿠션 신장/수축', en: 'L/R: cushion extend / retract' },
   },
   bolster: {
     key: 'bolster',
     status: 4,
     name: { ko: '볼스터', en: 'Bolster' },
-    subName: 'Side Bolster Control',
+    subName: 'Backrest Side Bolster',
     lrAxis: 'bolster',
     udAxis: null,
-    desc: { ko: '좌우: 사이드 볼스터 밀착 조작', en: 'L/R: side bolster grip' },
+    desc: { ko: '좌우: 등받이 볼스터 조임/풀림', en: 'L/R: backrest bolster grip' },
   },
   recline: {
     key: 'recline',
@@ -315,16 +318,16 @@ export const MODE_SPEC_LABELS: Record<ModeKey, Record<Direction, LocalizedText |
     right: { ko: '레그레스트 내림', en: 'Legrest Down' },
   },
   cushion: {
-    up: { ko: '쿠션 팽창', en: 'Cushion Inflation' },
-    down: { ko: '쿠션 수축', en: 'Cushion Deflation' },
-    left: null,
-    right: null,
+    up: null,
+    down: null,
+    left: { ko: '쿠션 신장', en: 'Cushion Extend' },
+    right: { ko: '쿠션 수축', en: 'Cushion Retract' },
   },
   bolster: {
     up: null,
     down: null,
-    left: { ko: '볼스터 팽창', en: 'Bolster Inflation' },
-    right: { ko: '볼스터 수축', en: 'Bolster Deflation' },
+    left: { ko: '볼스터 조임', en: 'Bolster Tighten' },
+    right: { ko: '볼스터 풀림', en: 'Bolster Release' },
   },
   recline: {
     up: null,
@@ -374,7 +377,7 @@ export function clamp(value: number, min: number, max: number): number {
 
 /**
  * 릴렉스 On 프리셋 목표값
- *  - 리클라이너 최대 / 틸트 최대 / 레그레스트 최대 / 쿠션 최대 팽창
+ *  - 리클라이너 최대 / 틸트 최대 / 레그레스트 최대 / 쿠션 최대 신장
  *  - 슬라이드 · 하이트는 중간 위치
  * Off 는 On 이전 값(스냅샷)으로 복귀합니다.
  */
@@ -446,14 +449,19 @@ export function primaryAxis(modeKey: ModeKey): AxisKey {
   return conf.lrAxis ?? conf.udAxis ?? 'tilt';
 }
 
+/** 좌(L) 조작에 수치가 증가하는 축 — 레그레스트 올림 / 볼스터 조임 / 쿠션 신장(도해의 FWD = 좌) */
+const LEFT_INCREASE_AXES: AxisKey[] = ['legrest', 'bolster', 'cushion'];
+
 /**
- * 좌우(L/R) 조작 시 수치 부호 규칙 (seat_main._execute_direction_step 대응)
- *  - legrest / bolster 는 좌(L) 조작 시 수치 증가
+ * 방향 조작 시 수치 부호 규칙 (seat_main._execute_direction_step 대응)
+ *  - legrest / bolster / cushion 은 좌(L) 조작 시 수치 증가
  *  - 그 외 축은 좌(L) = 감소, 우(R) = 증가
+ *  - 상하(U/D)는 상(U) = 증가, 하(D) = 감소
  */
 export function lrSign(axisKey: AxisKey, direction: Direction): number {
-  if (direction === 'left') return axisKey === 'legrest' || axisKey === 'bolster' ? 1 : -1;
-  if (direction === 'right') return axisKey === 'legrest' || axisKey === 'bolster' ? -1 : 1;
+  const leftIsIncrease = LEFT_INCREASE_AXES.includes(axisKey);
+  if (direction === 'left') return leftIsIncrease ? 1 : -1;
+  if (direction === 'right') return leftIsIncrease ? -1 : 1;
   if (direction === 'up') return 1;
   return -1;
 }
