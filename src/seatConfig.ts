@@ -234,9 +234,9 @@ export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {
     status: 2,
     name: { ko: '레그레스트', en: 'Legrest' },
     subName: 'Legrest Control',
-    lrAxis: 'legrest',
-    udAxis: null,
-    desc: { ko: '좌우: 종아리 받침대 각도 조작', en: 'L/R: calf support angle' },
+    lrAxis: null,
+    udAxis: 'legrest',
+    desc: { ko: '상하: 종아리 받침대 각도 조작', en: 'U/D: calf support angle' },
   },
   cushion: {
     key: 'cushion',
@@ -281,7 +281,10 @@ export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {
     subName: 'Lumbar Support Control',
     lrAxis: 'lumber',
     udAxis: 'lumber_height',
-    desc: { ko: '좌우: 럼버 전후 / 상하: 럼버 높이 (4-Way)', en: 'L/R: fore-aft / U/D: height (4-Way)' },
+    desc: {
+      ko: '좌우: 럼버 전진/후진 / 상하: 럼버 높이 (4-Way)',
+      en: 'L/R: fore-aft / U/D: height (4-Way)',
+    },
   },
   slide: {
     key: 'slide',
@@ -312,10 +315,10 @@ export const MODE_SPEC_LABELS: Record<ModeKey, Record<Direction, LocalizedText |
     right: null,
   },
   legrest: {
-    up: null,
-    down: null,
-    left: { ko: '레그레스트 올림', en: 'Legrest Up' },
-    right: { ko: '레그레스트 내림', en: 'Legrest Down' },
+    up: { ko: '레그레스트 올림', en: 'Legrest Up' },
+    down: { ko: '레그레스트 내림', en: 'Legrest Down' },
+    left: null,
+    right: null,
   },
   cushion: {
     up: null,
@@ -344,8 +347,8 @@ export const MODE_SPEC_LABELS: Record<ModeKey, Record<Direction, LocalizedText |
   lumber: {
     up: { ko: '럼버 상단', en: 'Lumbar Upper' },
     down: { ko: '럼버 하단', en: 'Lumbar Lower' },
-    left: { ko: '럼버 전후', en: 'Lumbar Middle' },
-    right: { ko: '럼버 수축', en: 'Lumbar Deflation' },
+    left: { ko: '럼버 전진', en: 'Lumbar Forward' },
+    right: { ko: '럼버 후진', en: 'Lumbar Backward' },
   },
   slide: {
     up: null,
@@ -449,12 +452,13 @@ export function primaryAxis(modeKey: ModeKey): AxisKey {
   return conf.lrAxis ?? conf.udAxis ?? 'tilt';
 }
 
-/** 좌(L) 조작에 수치가 증가하는 축 — 레그레스트 올림 / 볼스터 조임 / 쿠션 신장(도해의 FWD = 좌) */
-const LEFT_INCREASE_AXES: AxisKey[] = ['legrest', 'bolster', 'cushion'];
+/** 좌(L) 조작에 수치가 증가하는 축 — 볼스터 조임 / 쿠션 신장 / 럼버 돌출 (도해의 FWD = 좌) */
+const LEFT_INCREASE_AXES: AxisKey[] = ['bolster', 'cushion', 'lumber'];
 
 /**
  * 방향 조작 시 수치 부호 규칙 (seat_main._execute_direction_step 대응)
- *  - legrest / bolster / cushion 은 좌(L) 조작 시 수치 증가
+ *  - bolster / cushion / lumber 는 좌(L) 조작 시 수치 증가
+ *    (세 축 모두 값이 커지면 화면에서 좌측(FWD)으로 움직이므로 버튼 방향과 시선이 일치한다)
  *  - 그 외 축은 좌(L) = 감소, 우(R) = 증가
  *  - 상하(U/D)는 상(U) = 증가, 하(D) = 감소
  */

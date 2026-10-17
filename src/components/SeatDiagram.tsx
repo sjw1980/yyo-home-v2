@@ -7,7 +7,7 @@ import { AXIS_CONFIG, clamp } from '../seatConfig';
  *  · 현재 포즈 : 화이트 라인 + 조작 중인 축만 앰버(#f0a53c) 글로우
  *  · 타깃 포즈 : 릴렉스 프리셋 이동 중에만 민트(#5fd6a4) 점선 고스트로 겹쳐 표시
  * 형상 계산(슬라이드/하이트/리클라이너/틸트/레그레스트/쿠션/럼버)은 기존 물리 모델과 동일하다.
- * 볼스터는 자동차 시트와 같이 **등받이 좌우를 감싸는 사이드 윙**으로 렌더링한다(좌판 아님).
+ * 볼스터는 자동차 시트와 같이 **등받이 좌우(엉덩이~어깨)를 감싸는 사이드 윙**으로 렌더링한다(좌판 아님).
  */
 
 interface SeatDiagramProps {
@@ -51,8 +51,8 @@ function geometry(pose: Record<AxisKey, number>) {
   const extPx = (clamp(pose.cushion, 0, 60) / 60) * 46;
   const tiltDeg = clamp(pose.tilt, 0, 15);
   const reclineDeg = clamp(pose.recline, 0, 60);
-  /** 볼스터: 등받이 좌우 윙 — 값이 클수록 등판 안쪽(신체 방향)으로 조여 든다 */
-  const bolsterPush = (clamp(pose.bolster, 0, 40) / 40) * 24;
+  /** 볼스터: 등받이 좌우 윙 — 엉덩이~어깨를 값이 클수록 등판 안쪽으로 감싼다 */
+  const bolsterPush = (clamp(pose.bolster, 0, 40) / 40) * 20;
   const lumbarPush = (clamp(pose.lumber, 0, 50) / 50) * 11;
   const lumbarY = 214 - (clamp(pose.lumber_height, 0, 50) / 50) * 62;
 
@@ -116,8 +116,8 @@ function SeatShape({ geo, variant, isActive }: SeatShapeProps) {
     legRot,
   } = geo;
 
-  /** 볼스터 윙 선단 x — 조임 정도에 따라 등판 안쪽(전방)으로 이동 (베지어 중간점 근사) */
-  const bolsterTipX = PIVOT_X - 3 - 0.75 * (bolsterPush + 10);
+  /** 볼스터 윙 선단 x — 등판 안쪽으로 감기는 정도 (베지어 중간점) */
+  const bolsterTipX = PIVOT_X - 5 - bolsterPush * 0.75;
 
   return (
     <g
@@ -141,12 +141,12 @@ function SeatShape({ geo, variant, isActive }: SeatShapeProps) {
           fill={pad('recline')}
           filter={glow('recline')}
         />
-        {/* 사이드 볼스터 — 등받이 좌우를 감싸는 윙 (값 ↑ → 등판 안쪽으로 조임) */}
+        {/* 사이드 볼스터 — 엉덩이에서 어깨까지 등받이 좌우를 감싸는 롱 윙 */}
         <path
-          d={`M ${PIVOT_X + 3} ${PAN_Y - 150}
-              C ${PIVOT_X - 10 - bolsterPush} ${PAN_Y - 142}
-                ${PIVOT_X - 10 - bolsterPush} ${PAN_Y - 96}
-                ${PIVOT_X + 3} ${PAN_Y - 88} Z`}
+          d={`M ${PIVOT_X + 3} ${PAN_Y + 2}
+              C ${PIVOT_X - 8 - bolsterPush} ${PAN_Y - 26}
+                ${PIVOT_X - 8 - bolsterPush} ${PAN_Y - 112}
+                ${PIVOT_X + 3} ${PAN_Y - 138} Z`}
           stroke={stroke('bolster')}
           strokeWidth={ghost ? 1.6 : 2.2}
           fill={pad('bolster')}
@@ -154,19 +154,32 @@ function SeatShape({ geo, variant, isActive }: SeatShapeProps) {
         />
         {/* 윙 패딩 내측 라인 */}
         <path
-          d={`M ${PIVOT_X + 3} ${PAN_Y - 141}
-              C ${PIVOT_X - 3 - bolsterPush * 0.7} ${PAN_Y - 134}
-                ${PIVOT_X - 3 - bolsterPush * 0.7} ${PAN_Y - 102}
-                ${PIVOT_X + 3} ${PAN_Y - 95}`}
+          d={`M ${PIVOT_X + 2} ${PAN_Y - 8}
+              C ${PIVOT_X - 2 - bolsterPush * 0.55} ${PAN_Y - 32}
+                ${PIVOT_X - 2 - bolsterPush * 0.55} ${PAN_Y - 106}
+                ${PIVOT_X + 2} ${PAN_Y - 130}`}
           stroke={ghost ? MINT_DASH : act('bolster') ? AMBER : LINE_SOFT}
           strokeWidth="1.4"
           fill="none"
         />
-        {/* 조임 방향 인디케이터 */}
+        {/* 먼 쪽 볼스터(절선) — 좌우 한 쌍이 몸을 감싼다는 표시 */}
+        {!ghost && (
+          <path
+            d={`M ${PIVOT_X + 14} ${PAN_Y - 4}
+                C ${PIVOT_X + 8 - bolsterPush * 0.5} ${PAN_Y - 30}
+                  ${PIVOT_X + 8 - bolsterPush * 0.5} ${PAN_Y - 110}
+                  ${PIVOT_X + 14} ${PAN_Y - 134}`}
+            stroke="rgba(255,255,255,.2)"
+            strokeWidth="1.3"
+            strokeDasharray="3 4"
+            fill="none"
+          />
+        )}
+        {/* 감김 방향 인디케이터 */}
         {!ghost && act('bolster') && (
           <g stroke={AMBER} strokeWidth="1.8" fill="none" strokeLinecap="round">
-            <path d={`M ${bolsterTipX - 3} ${PAN_Y - 123} l -6 4 l 6 4`} />
-            <path d={`M ${bolsterTipX + 5} ${PAN_Y - 123} l -6 4 l 6 4`} opacity=".45" />
+            <path d={`M ${bolsterTipX - 4} ${PAN_Y - 72} l -5 4 l 5 4`} />
+            <path d={`M ${bolsterTipX + 3} ${PAN_Y - 72} l -5 4 l 5 4`} opacity=".45" />
           </g>
         )}
 
@@ -499,7 +512,7 @@ export default function SeatDiagram({
       {/* ================= 부품 수치 오버레이 (본체를 가리지 않도록 최상단) ================= */}
       <g transform={`translate(${slidePx}, ${-heightPx})`}>
         {partTag('tilt', cushionFrontX - 24, PAN_Y - 30, 'end', tagLeft)}
-        {partTag('bolster', PIVOT_X - 34 - bolsterPush * 0.6, PAN_Y - 132, 'end', tagLeft)}
+        {partTag('bolster', PIVOT_X - 26 - bolsterPush * 0.7, PAN_Y - 68, 'end', tagLeft)}
         {partTag('cushion', cushionFrontX - 24, PAN_Y + 38, 'end', tagLeft)}
         {partTag('legrest', cushionFrontX - 24, PAN_Y + 60, 'end', tagLeft)}
         {partTag('recline', PIVOT_X + 96, PAN_Y - 168, 'start', tagRight)}
