@@ -8,16 +8,22 @@ import {
   MODE_CONFIG,
   MODE_ORDER,
   MODE_SPEC_LABELS,
-  RELAX_ON_AXES,
+  RELAX_SEQUENCE_AXES,
+  RELAX_STATE_LABEL,
   axisForDirection,
   clamp,
   lrSign,
+  modeCode,
   primaryAxis,
   relaxPreset,
+  relaxStateKey,
   rotateMode,
   type AxisKey,
   type Direction,
   type ModeKey,
+  type RelaxPhase,
+  type RelaxRun,
+  type RelaxStatus,
 } from '../seatConfig';
 import { translations } from '../data';
 
@@ -32,7 +38,7 @@ interface LogEntry {
   msg: string;
   tone: LogTone;
 }
-type DemoPhase = 'idle' | 'mode_transition' | 'value_tuning' | 'up_delay';
+type DemoPhase = 'idle' | 'mode_transition' | 'value_tuning' | 'up_delay' | 'relax_demo';
 
 interface SeatSimulatorProps {
   currentLang: 'ko' | 'en';
@@ -46,11 +52,18 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const t = (key: string, fallback = '') => translations[key]?.[currentLang] ?? fallback;
 
   // ================= UI 상태 =================
-  const [mode, setMode] = useState<ModeKey>('tilt');
+  const [mode, setMode] = useState<ModeKey>(MODE_ORDER[0]);
   const [controlMode, setControlModeState] = useState<ControlMode>('manual');
   const [pressed, setPressed] = useState<Direction | null>(null);
   const [activeAxis, setActiveAxis] = useState<AxisKey | null>(null);
-  const [relaxOn, setRelaxOn] = useState(false);
+  /**
+   * 릴렉스 프리셋 상태 (모드와 독립적인 레이어)
+   *  phase : off / on(100% 적용) / partial(100% 이전 중단 — ON 도 OFF 도 아님)
+   *  run   : 현재 이동 중인 시퀀스 방향 (정지 중이면 null)
+   * — 시뮬레이션 루프에서 참조해야 하므로 ref 를 정본으로 두고 state 에 미러링한다.
+   */
+  const relaxRef = useRef<RelaxStatus>({ phase: 'off', run: null });
+  const [relax, setRelaxState] = useState<RelaxStatus>(relaxRef.current);
   const [, setFrame] = useState(0);
   /** 시퀀스 로그 (HMI 우측 패널) — 조작/축 완료 시점에만 갱신 */
   const [log, setLog] = useState<LogEntry[]>([
@@ -61,7 +74,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const posRef = useRef<Record<AxisKey, number>>({ ...INITIAL_POSITIONS });
   const tgtRef = useRef<Record<AxisKey, number>>({ ...INITIAL_POSITIONS });
   const pressRef = useRef<{ axis: AxisKey; dir: Direction } | null>(null);
-  const modeRef = useRef<ModeKey>('tilt');
+  const modeRef = useRef<ModeKey>(MODE_ORDER[0]);
   const controlModeRef = useRef<ControlMode>('manual');
   const langRef = useRef<'ko' | 'en'>(currentLang);
   const keyHeldRef = useRef<Set<string>>(new Set());
@@ -78,7 +91,25 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     targetMode: ModeKey;
     targetAxis: AxisKey;
     targetValue: number;
-  }>({ phase: 'idle', delay: 0, targetMode: 'tilt', targetAxis: 'tilt', targetValue: 50 });
+    /** 모드 전환 카운터 (4사이클마다 릴렉스 프리셋 시연) */
+    cycle: number;
+    /** 릴렉스 시연 단계 (0 = On 적용 중, 1 = Off 복귀 중) */
+    relaxStep: number;
+  }>({
+    phase: 'idle',
+    delay: 0,
+    targetMode: MODE_ORDER[0],
+    targetAxis: primaryAxis(MODE_ORDER[0]),
+    targetValue: 50,
+    cycle: 0,
+    relaxStep: 0,
+  });
+
+  /** 릴렉스 상태 갱신 (ref 정본 + state 미러) */
+  const setRelax = (phase: RelaxPhase, run: RelaxRun) => {
+    relaxRef.current = { phase, run };
+    setRelaxState(relaxRef.current);
+  };
 
   langRef.current = currentLang;
 
@@ -88,35 +119,64 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     setLog((prev) => [{ t: stamp, msg, tone }, ...prev].slice(0, 6));
   };
 
-  // ================= 공통 제어 =================
+  // ================= 릴렉스 프리셋 레이어 (드라이브 모드와 독립) =================
   /**
-   * 릴렉스 On/Off 프리셋
-   *  On  : On 이전 값 스냅샷을 저장하고 RELAX_ON_TARGETS 로 이동 (릴렉스 100%)
+   * 릴렉스 On/Off 프리셋 적용
+   *  On  : 스냅샷이 없으면 현재 6축을 저장하고 RELAX_ON_TARGETS 로 이동 (릴렉스 100% 목표)
+   *        — 부분 적용 상태에서 누르면 스냅샷을 유지한 채 100% 까지 재개한다
    *  Off : 스냅샷 값으로 복귀 (릴렉스 0%)
    */
   const applyRelaxPreset = (on: boolean) => {
     pressRef.current = null;
     setPressed(null);
 
+    const prev = relaxRef.current;
+    const hadSnapshot = relaxSnapshotRef.current !== null;
     const result = relaxPreset(posRef.current, relaxSnapshotRef.current, on);
     Object.assign(tgtRef.current, result.targets);
     relaxSnapshotRef.current = result.snapshot;
 
     // 이동이 실제로 발생하는 축만 타깃 마커 대상으로 등록 (Off 시 스냅샷 복귀 구간 포함)
     const moving = new Set<AxisKey>();
-    ([...RELAX_ON_AXES, 'relaxation_return'] as AxisKey[]).forEach((k) => {
+    RELAX_SEQUENCE_AXES.forEach((k) => {
       const target = result.targets[k];
       if (target !== undefined && Math.abs(target - posRef.current[k]) > 0.05) moving.add(k);
     });
     relaxAxesRef.current = moving;
 
-    pushLog(
-      on ? 'RELAX ON · SNAPSHOT SAVED (6AX)' : 'RELAX OFF · RESTORE SNAPSHOT',
-      on ? 'hot' : 'ok',
-    );
-    setRelaxOn(on);
+    if (on) {
+      pushLog(
+        prev.phase === 'partial'
+          ? `RELAX RESUME · ${Math.round(clamp(posRef.current.relaxation_return, 0, 100))}% → 100%`
+          : hadSnapshot
+            ? 'RELAX ON · TARGET 100% (6AX)'
+            : 'RELAX ON · SNAPSHOT SAVED (6AX)',
+        'hot',
+      );
+    } else {
+      pushLog('RELAX OFF · RESTORE SNAPSHOT', 'ok');
+    }
+
+    // 이동이 끝나면 engineTick 에서 phase 가 확정된다 (이동 중에는 run 라벨이 우선 표시)
+    setRelax(on ? 'on' : 'off', moving.size ? (on ? 'on' : 'off') : null);
     setActiveAxis('relaxation_return');
     setFrame((f) => f + 1);
+  };
+
+  /**
+   * 릴렉스 시퀀스 중단 — 100% 도달 전에 모드 전환/수동 조작이 들어오면
+   * 전 축을 현재 위치에서 세우고 ON 도 OFF 도 아닌 '부분 적용(PARTIAL)' 상태로 둔다.
+   *  (이후 On = 100% 까지 재개 / Off = 스냅샷 복귀)
+   */
+  const interruptRelaxSequence = (reason: string) => {
+    if (relaxRef.current.run === null) return;
+    RELAX_SEQUENCE_AXES.forEach((k) => {
+      tgtRef.current[k] = posRef.current[k];
+    });
+    relaxAxesRef.current = new Set();
+    const pct = Math.round(clamp(posRef.current.relaxation_return, 0, 100));
+    setRelax('partial', null);
+    pushLog(`RELAX INTERRUPTED · ${pct}% PARTIAL · ${reason}`, 'hot');
   };
 
   /** 현재 조작 중단 (현재 위치를 타깃으로 고정) */
@@ -131,9 +191,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const selectMode = (next: ModeKey) => {
     if (next === modeRef.current) return;
     stopMotion();
+    // 모드 전환 = 릴렉스 시퀀스 중단 (100% 이전이라면 부분 적용 상태로 유지)
+    interruptRelaxSequence(`CONTROL → ${modeCode(next)}`);
     modeRef.current = next;
     setMode(next);
-    pushLog(`MODE → M${MODE_CONFIG[next].status} · ${MODE_CONFIG[next].subName.toUpperCase()}`);
+    pushLog(`CONTROL → ${modeCode(next)} · ${MODE_CONFIG[next].subName.toUpperCase()}`);
     setFrame((f) => f + 1);
   };
 
@@ -153,8 +215,10 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
         phase: 'mode_transition',
         delay: 0,
         targetMode: modeRef.current,
-        targetAxis: 'tilt',
+        targetAxis: primaryAxis(modeRef.current),
         targetValue: 50,
+        cycle: 0,
+        relaxStep: 0,
       };
     }
   };
@@ -164,11 +228,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     controlModeRef.current = 'manual';
     setControlModeState('manual');
     stopMotion();
-    modeRef.current = 'tilt';
-    setMode('tilt');
+    modeRef.current = MODE_ORDER[0];
+    setMode(MODE_ORDER[0]);
     relaxSnapshotRef.current = null;
     relaxAxesRef.current = new Set();
-    setRelaxOn(false);
+    setRelax('off', null);
     pushLog('POSE RESET · INITIAL VALUES', 'ok');
     posRef.current = { ...INITIAL_POSITIONS };
     tgtRef.current = { ...INITIAL_POSITIONS };
@@ -178,11 +242,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const handlePress = (dir: Direction) => {
     // 수동 조작 시작 시 AUTO DEMO 정지
     if (controlModeRef.current === 'auto') setControlMode('manual');
-    // 수동 조작 구간에서는 타깃 마커를 표시하지 않는다
-    relaxAxesRef.current = new Set();
-
-    // 릴렉스 모드는 방향 조작 대신 On/Off 프리셋을 사용한다
-    if (modeRef.current === 'relaxation') return;
+    // 수동 오버라이드 = 릴렉스 시퀀스 중단 (100% 이전이면 부분 적용 상태로 유지)
+    interruptRelaxSequence('MANUAL OVERRIDE');
 
     const axis = axisForDirection(modeRef.current, dir);
     if (!axis) return;
@@ -195,7 +256,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     setActiveAxis(axis);
   };
 
-  /** 릴렉스 On/Off 버튼 (수동 조작 시작 시 AUTO DEMO 정지) */
+  /** 릴렉스 On/Off 버튼 (모드와 무관하게 항상 조작 가능) */
   const handleRelaxButton = (on: boolean) => {
     if (controlModeRef.current === 'auto') setControlMode('manual');
     applyRelaxPreset(on);
@@ -234,20 +295,40 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
         break;
       }
     }
+
+    // 릴렉스 프리셋 레이어 시연 — 모드 전환과 무관하게 겹쳐 동작하므로 축 수렴을 기다린다
+    if (demo.phase === 'relax_demo') {
+      if (moving) return;
+      demo.delay -= dt;
+      if (demo.delay > 0) return;
+      if (demo.relaxStep === 0) {
+        // On(100%) 유지 후 → Off 로 스냅샷 복귀
+        demo.relaxStep = 1;
+        applyRelaxPreset(false);
+        demo.delay = 1.5;
+      } else {
+        demo.phase = 'mode_transition';
+        demo.delay = 0;
+      }
+      return;
+    }
+
     if (demo.phase === 'mode_transition' && moving) return;
 
     if (demo.phase === 'mode_transition') {
+      // 4사이클마다 릴렉스 프리셋(On → Off)을 시연한다 — 모드 트랙과는 별개의 레이어
+      demo.cycle += 1;
+      if (demo.cycle % 4 === 0) {
+        demo.relaxStep = 0;
+        applyRelaxPreset(true);
+        demo.phase = 'relax_demo';
+        demo.delay = 2.0;
+        return;
+      }
+
       const next = rotateMode(demo.targetMode, 1);
       demo.targetMode = next;
       selectMode(next);
-
-      // 릴렉스 모드는 축 조작 대신 On/Off 프리셋을 교대로 시연한다
-      if (next === 'relaxation') {
-        applyRelaxPreset(relaxSnapshotRef.current === null);
-        demo.phase = 'up_delay';
-        demo.delay = 2.5;
-        return;
-      }
 
       const axis = primaryAxis(next);
       const confAxis = AXIS_CONFIG[axis];
@@ -321,6 +402,18 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
       });
     }
 
+    // 릴렉스 시퀀스 이동 완료 → 상태를 확정한다 (이동 중에는 run 라벨이 우선 표시됨)
+    if (relaxAxesRef.current.size === 0 && relaxRef.current.run !== null) {
+      const settled = relaxRef.current.phase;
+      setRelax(settled, null);
+      pushLog(
+        settled === 'on'
+          ? 'RELAX POSE APPLIED · 100% · 6 AXES HOLDING'
+          : 'RELAX RELEASED · SNAPSHOT RESTORED',
+        settled === 'on' ? 'ok' : 'dim',
+      );
+    }
+
     // 조작 중 타깃 갱신 (ref: _execute_direction_step — 40ms 명령 스텝, 하드 리밋만 적용)
     const press = pressRef.current;
     if (press && controlModeRef.current === 'manual') {
@@ -361,13 +454,16 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     if (keyMap[e.key]) {
       e.preventDefault();
       if (e.repeat) return;
-      // 릴렉스 모드: →/↑ = On, ←/↓ = Off (프리셋이라 홀드 조작 없음)
-      if (modeRef.current === 'relaxation') {
-        handleRelaxButton(e.key === 'ArrowRight' || e.key === 'ArrowUp');
-        return;
-      }
       keyHeldRef.current.add(e.key);
       handlePress(keyMap[e.key]);
+      return;
+    }
+    // R = 릴렉스 프리셋 토글 (모드와 무관 — ON/적용 중이면 Off 복귀, 그 외에는 100% 까지 On)
+    if (e.key === 'r' || e.key === 'R') {
+      if (!e.repeat) {
+        const goingOn = !(relaxRef.current.phase === 'on' || relaxRef.current.run === 'on');
+        handleRelaxButton(goingOn);
+      }
       return;
     }
     if (e.key === 'q' || e.key === 'Q') {
@@ -454,29 +550,52 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     );
   };
 
-  /** 릴렉스 모드용 On/Off 프리셋 버튼 (On = 릴렉션 포즈, Off = 직전 값 복귀) */
+  /**
+   * 릴렉스 프리셋 버튼 — 드라이브 모드와 무관하게 항상 조작 가능한 레이어 컨트롤
+   *  On  : 스냅샷 저장 후 릴렉션 포즈로 100% 이동 (부분 적용 상태에서는 100% 까지 재개)
+   *  Off : 스냅샷으로 복귀
+   */
   const relaxButton = (on: boolean) => {
-    const active = relaxOn === on;
+    const active = relax.phase === on && relax.run === null;
+    const busy = relax.run === (on ? 'on' : 'off');
+    /** Off 는 복귀할 스냅샷이 있을 때만 의미가 있다 */
+    const disabled =
+      !on && relax.phase === 'off' && relax.run === null && !relaxSnapshotRef.current;
+    const caption = on
+      ? relax.phase === 'partial'
+        ? 'RESUME'
+        : 'ON'
+      : relax.phase === 'partial'
+        ? 'RESTORE'
+        : 'OFF';
     return (
       <button
         key={on ? 'relax-on' : 'relax-off'}
         type="button"
-        onClick={() => {
-          if (modeRef.current !== 'relaxation') selectMode('relaxation');
-          handleRelaxButton(on);
-        }}
-        title={on ? '릴렉션 포즈 적용' : '직전 값으로 복귀'}
-        className={`flex-1 h-10 rounded-[10px] border flex flex-col items-center justify-center gap-[2px] transition-all select-none
+        disabled={disabled}
+        onClick={() => handleRelaxButton(on)}
+        title={
+          on
+            ? relax.phase === 'partial'
+              ? '이어서 릴렉션 포즈 100% 적용'
+              : '릴렉션 포즈 적용 (현재 값은 스냅샷으로 저장)'
+            : '직전 스냅샷으로 복귀'
+        }
+        className={`flex-1 h-11 rounded-[10px] border flex flex-col items-center justify-center gap-[2px] transition-all
           ${
-            active
-              ? on
-                ? 'bg-[#f0a53c] text-[#0a0d0f] border-[#f0a53c] shadow-[0_0_18px_rgba(240,165,60,.35)]'
-                : 'bg-white/10 text-white border-white/25'
-              : 'border-white/[.12] text-[#93a2a4] hover:border-[#f0a53c]/60 hover:text-[#ffc276] cursor-pointer'
+            disabled
+              ? 'border-white/[.06] text-[#4f5c5f]'
+              : active
+                ? on
+                  ? 'bg-[#5fd6a4] text-[#08120e] border-[#5fd6a4] shadow-[0_0_18px_rgba(95,214,164,.35)]'
+                  : 'bg-white/10 text-white border-white/25'
+                : busy
+                  ? 'border-[#f0a53c] text-[#ffc276] bg-[#f0a53c]/10 animate-pulse cursor-pointer'
+                  : 'border-white/[.12] text-[#93a2a4] hover:border-[#f0a53c]/60 hover:text-[#ffc276] cursor-pointer'
           }`}
       >
         <span className="text-[11px] leading-none">{on ? '⏻' : '↺'}</span>
-        <span className="text-[9px] leading-none font-bold tracking-[.2em]">{on ? 'ON' : 'OFF'}</span>
+        <span className="text-[9px] leading-none font-bold tracking-[.2em]">{caption}</span>
       </button>
     );
   };
@@ -485,6 +604,34 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   // ================= HMI 렌더 계산 =================
   /** 릴렉스 프리셋 적용률 (0~100) */
   const relaxPct = clamp(pos.relaxation_return, 0, 100);
+  /** 릴렉스 표시 상태 — 이동 중이면 진행 방향(APPLYING/RESTORING)을 우선한다 */
+  const relaxKey = relaxStateKey(relax);
+  const relaxLabel = RELAX_STATE_LABEL[relaxKey][currentLang];
+  /** 상태별 강조 톤 (이동 중 앰버 / ON 민트 / 부분 적용 딤앰버 / OFF 그레이) */
+  const relaxTone =
+    relax.run !== null
+      ? {
+          text: 'text-[#ffc276]',
+          chip: 'border-[#f0a53c]/50 bg-[#f0a53c]/10 text-[#ffc276]',
+          dot: 'bg-[#f0a53c]',
+        }
+      : relax.phase === 'on'
+        ? {
+            text: 'text-[#8fe6c2]',
+            chip: 'border-[#5fd6a4]/50 bg-[#5fd6a4]/10 text-[#8fe6c2]',
+            dot: 'bg-[#5fd6a4]',
+          }
+        : relax.phase === 'partial'
+          ? {
+              text: 'text-[#c9a273]',
+              chip: 'border-[#f0a53c]/30 bg-[#f0a53c]/[.07] text-[#c9a273]',
+              dot: 'bg-[#c9a273]',
+            }
+          : {
+              text: 'text-[#93a2a4]',
+              chip: 'border-white/[.12] bg-white/[.04] text-[#93a2a4]',
+              dot: 'bg-[#6f7f82]',
+            };
   /** 축 잔여 이동 시간 (s) */
   const etaOf = (axis: AxisKey) => {
     const conf = AXIS_CONFIG[axis];
@@ -528,19 +675,49 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     0,
     ...[...CHOREO_AXES, 'relaxation_return' as AxisKey].map((k) => etaOf(k)),
   );
-  /** 배너 톤 — 이동 중(앰버) / 릴렉스 포즈 유지(민트) / 유휴(그레이) */
+  /** 배너 톤 — 이동 중(앰버) / 릴렉스 포즈 유지(민트) / 부분 적용(딤앰버) / 유휴(그레이) */
   const running = ghostPose || (activeAxis !== null && etaOf(activeAxis) > 0);
-  const bannerTone: 'run' | 'hold' | 'idle' = running ? 'run' : relaxOn ? 'hold' : 'idle';
+  const bannerTone: 'run' | 'hold' | 'partial' | 'idle' = running
+    ? 'run'
+    : relax.phase === 'on'
+      ? 'hold'
+      : relax.phase === 'partial'
+        ? 'partial'
+        : 'idle';
   const bannerText = ghostPose
-    ? `RLX RUNNING · ${relaxPct.toFixed(0)}% APPLIED · ETA ${etaMax.toFixed(1)} s`
+    ? `RLX ${relax.run === 'off' ? 'RESTORING' : 'APPLYING'} · ${relaxPct.toFixed(0)}% APPLIED · ETA ${etaMax.toFixed(1)} s`
     : running && activeAxis
       ? `${AXIS_CONFIG[activeAxis].code} RUNNING · ${fmtAxis(activeAxis, pos[activeAxis])} → ${fmtAxis(
           activeAxis,
           tgt[activeAxis],
         )} · ETA ${etaOf(activeAxis).toFixed(1)} s`
-      : relaxOn
-        ? 'RELAX POSE APPLIED · 6 AXES HOLDING'
-        : 'SYSTEM IDLE · SELECT A MODE AND HOLD A DIRECTION KEY';
+      : relax.phase === 'on'
+        ? 'RELAX POSE APPLIED · 100% · 6 AXES HOLDING'
+        : relax.phase === 'partial'
+          ? `RELAX PARTIAL · ${relaxPct.toFixed(0)}% APPLIED · ON = RESUME 100% / OFF = RESTORE`
+          : 'SYSTEM IDLE · SELECT A MODE AND HOLD A DIRECTION KEY';
+
+  /** 릴렉스 프리셋 패널 상태 안내문 */
+  const relaxHint =
+    relax.run === 'on'
+      ? currentLang === 'ko'
+        ? '릴렉션 포즈 적용 중 — 다른 모드를 고르거나 로커를 조작하면 중단되어 부분 적용이 됩니다.'
+        : 'Applying relax pose — picking another mode or using the rocker interrupts it into PARTIAL.'
+      : relax.run === 'off'
+        ? currentLang === 'ko'
+          ? '스냅샷 복귀 중…'
+          : 'Restoring snapshot…'
+        : relax.phase === 'on'
+          ? currentLang === 'ko'
+            ? '릴렉션 포즈 유지 중. Off 를 누르면 스냅샷으로 6축이 동시에 복귀합니다.'
+            : 'Relax pose holding. Off restores the 6-axis snapshot together.'
+          : relax.phase === 'partial'
+            ? currentLang === 'ko'
+              ? '시퀀스 중단 — ON 은 100% 까지 이어서 적용하고, OFF 는 스냅샷으로 복귀합니다.'
+              : 'Sequence interrupted — ON resumes to 100%, OFF restores the snapshot.'
+            : currentLang === 'ko'
+              ? 'ON 을 누르면 현재 6축이 스냅샷으로 저장되고 릴렉션 포즈로 이동합니다.'
+              : 'ON saves the current 6 axes as a snapshot, then drives the relax pose.';
 
   /** 진행률 링 (270° 호) */
   const RING_R = 104;
@@ -590,9 +767,20 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
               YYO · SEAT CONTROL
             </span>
             <span className="text-[11px] tracking-[.26em] uppercase text-[#7f8f92] truncate">
-              Mode {String(MODE_CONFIG[mode].status).padStart(2, '0')} ·{' '}
+              Control {modeCode(mode)} ·{' '}
               {MODE_CONFIG[mode].name[currentLang]}
-              {mode === 'relaxation' ? (relaxOn ? ' · ON' : ' · OFF') : ''}
+            </span>
+            {/* 릴렉스는 모드와 동급이 아니다 — 겹쳐지는 프리셋 레이어로 별도 칩에 표시 */}
+            <span
+              className={`flex items-center gap-1.5 px-2 py-[3px] rounded-full border text-[10px] tracking-[.18em] uppercase whitespace-nowrap ${relaxTone.chip}`}
+            >
+              <i
+                className={`w-[6px] h-[6px] rounded-full ${relaxTone.dot} ${
+                  relax.run ? 'animate-pulse' : ''
+                }`}
+              />
+              Rlx {relaxLabel}
+              {relax.phase === 'partial' || relax.run ? ` ${relaxPct.toFixed(0)}%` : ''}
             </span>
             <div className="flex-1 min-w-[8px]" />
             <span className="flex items-center gap-2 text-[12px] tracking-[.12em] text-[#a9b7b9] whitespace-nowrap">
@@ -650,13 +838,80 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
 
           {/* ---- 3열 그리드 ---- */}
           <div className="grid lg:grid-cols-[316px_minmax(0,1fr)_300px] gap-px bg-white/[.07]">
-            {/* ================= 좌측: 드라이브 모드 시퀀스 ================= */}
+            {/* ============ 좌측: 릴렉스 프리셋(상단) + 드라이브 모드 시퀀스 ============ */}
             <div className="bg-[#0a0d0f] p-5 flex flex-col min-h-0">
+              {/* ---- 릴렉스 프리셋 레이어 — 모드 트랙보다 상위에 둔다 (어떤 모드에서도 항상 노출) ---- */}
+              <div className="pb-4 mb-4 border-b border-white/10">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82]">
+                    Relax Preset
+                  </p>
+                  <span className={`text-[9.5px] tracking-[.2em] uppercase ${relaxTone.text}`}>
+                    {relaxLabel}
+                    {relax.phase === 'partial' || relax.run ? ` ${relaxPct.toFixed(0)}%` : ''}
+                  </span>
+                </div>
+
+                {/* 3상태 인디케이터 — OFF / 부분 적용 / ON (이동 중에는 목적지 칸이 점멸) */}
+                <div className="grid grid-cols-3 gap-1 mb-2">
+                  {(['off', 'partial', 'on'] as RelaxPhase[]).map((phase) => {
+                    const settled = relax.phase === phase && relax.run === null;
+                    const passing =
+                      relax.run !== null &&
+                      ((phase === 'on' && relax.run === 'on') ||
+                        (phase === 'off' && relax.run === 'off'));
+                    return (
+                      <span
+                        key={phase}
+                        className={`h-[22px] rounded-[7px] border flex items-center justify-center text-[9px] tracking-[.12em] uppercase transition-all ${
+                          settled
+                            ? phase === 'on'
+                              ? 'border-[#5fd6a4]/60 bg-[#5fd6a4]/15 text-[#8fe6c2]'
+                              : phase === 'partial'
+                                ? 'border-[#f0a53c]/45 bg-[#f0a53c]/10 text-[#c9a273]'
+                                : 'border-white/25 bg-white/10 text-white'
+                            : passing
+                              ? 'border-[#f0a53c]/60 text-[#ffc276] animate-pulse'
+                              : 'border-white/[.07] text-[#4f5c5f]'
+                        }`}
+                      >
+                        {RELAX_STATE_LABEL[phase][currentLang]}
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* 적용률 게이지 */}
+                <div className="h-[5px] rounded-full bg-white/[.07] overflow-hidden mb-1">
+                  <div
+                    className={`h-full rounded-full ${
+                      relax.phase === 'on' && relax.run === null
+                        ? 'bg-[linear-gradient(90deg,#3fae86,#5fd6a4)]'
+                        : 'bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]'
+                    }`}
+                    style={{ width: `${relaxPct}%` }}
+                  />
+                </div>
+                <p className="text-[9.5px] tracking-[.16em] uppercase text-[#5d6c6f] mb-3">
+                  {relax.run
+                    ? `ETA ${etaMax.toFixed(1)} s`
+                    : relax.phase === 'partial'
+                      ? 'INTERRUPTED · NOT ON / NOT OFF'
+                      : `${relaxPct.toFixed(0)}% APPLIED · ${
+                          relaxSnapshotRef.current ? 'SNAPSHOT SAVED' : 'NO SNAPSHOT'
+                        }`}
+                </p>
+
+                <div className="flex gap-2">
+                  {relaxButton(true)}
+                  {relaxButton(false)}
+                </div>
+                <p className="text-[11.5px] text-[#8d9c9e] leading-relaxed mt-3">{relaxHint}</p>
+              </div>
+
               <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82] mb-4">
                 Drive Modes{' '}
-                <b className="text-[#f0a53c] font-semibold">
-                  M{String(MODE_CONFIG[mode].status).padStart(2, '0')}
-                </b>
+                <b className="text-[#f0a53c] font-semibold">{modeCode(mode)}</b>
               </p>
               <div className="space-y-2">
                 {MODE_ORDER.map((key) => {
@@ -664,10 +919,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                   const selected = mode === key;
                   const axis = primaryAxis(key);
                   const confAxis = AXIS_CONFIG[axis];
-                  const isRelax = key === 'relaxation';
-                  const ratio = isRelax
-                    ? clamp(pos.relaxation_return, 0, 100)
-                    : clamp(((pos[axis] - confAxis.min) / (confAxis.max - confAxis.min)) * 100, 0, 100);
+                  const ratio = clamp(
+                    ((pos[axis] - confAxis.min) / (confAxis.max - confAxis.min)) * 100,
+                    0,
+                    100,
+                  );
                   return (
                     <button
                       key={key}
@@ -685,44 +941,24 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                             selected ? 'text-[#ffc276]' : 'text-[#c9d6d7]'
                           }`}
                         >
-                          M{conf.status}
+                          {modeCode(key)}
                         </span>
                         <span className="flex-1 text-[12.5px] text-[#8d9c9e] truncate">
                           {conf.name[currentLang]}
                         </span>
                         <span className="font-hmi-cond text-[17px] font-bold text-[#e9f1f2] whitespace-nowrap">
-                          {isRelax
-                            ? `${clamp(pos.relaxation_return, 0, 100).toFixed(0)}%`
-                            : fmtAxis(axis, pos[axis])}
+                          {fmtAxis(axis, pos[axis])}
                         </span>
                       </div>
                       <div className="h-[4px] rounded-full bg-white/[.07] mt-2 overflow-hidden">
                         <div
-                          className={`h-full rounded-full ${
-                            isRelax && relaxOn
-                              ? 'bg-[linear-gradient(90deg,#3fae86,#5fd6a4)]'
-                              : 'bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]'
-                          }`}
+                          className="h-full rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
                           style={{ width: `${ratio}%` }}
                         />
                       </div>
                     </button>
                   );
                 })}
-              </div>
-
-              <div className="mt-auto pt-4 border-t border-white/10">
-                <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82] mb-3">
-                  Relax Preset
-                </p>
-                <div className="flex gap-2">{relaxButton(true)}{relaxButton(false)}</div>
-                <p className="text-[11.5px] text-[#8d9c9e] leading-relaxed mt-3">
-                  Off 시{' '}
-                  <b className="text-[#e9f1f2] font-hmi-cond text-[13px]">
-                    {relaxSnapshotRef.current ? '스냅샷' : '초기값'}
-                  </b>{' '}
-                  으로 6축 동시 복귀 · Priority RCL
-                </p>
               </div>
             </div>
 
@@ -795,7 +1031,9 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                       ? 'border-[#f0a53c]/45 bg-[#f0a53c]/10 text-[#ffc276]'
                       : bannerTone === 'hold'
                         ? 'border-[#5fd6a4]/45 bg-[#5fd6a4]/10 text-[#8fe6c2]'
-                        : 'border-white/10 bg-white/[.03] text-[#7f8f92]'
+                        : bannerTone === 'partial'
+                          ? 'border-[#f0a53c]/25 bg-[#f0a53c]/[.06] text-[#c9a273]'
+                          : 'border-white/10 bg-white/[.03] text-[#7f8f92]'
                   }`}
                 >
                   <i
@@ -804,7 +1042,9 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                         ? 'bg-[#f0a53c] shadow-[0_0_12px_#f0a53c]'
                         : bannerTone === 'hold'
                           ? 'bg-[#5fd6a4] shadow-[0_0_12px_#5fd6a4]'
-                          : 'bg-[#4f5c5f]'
+                          : bannerTone === 'partial'
+                            ? 'bg-[#c9a273]'
+                            : 'bg-[#4f5c5f]'
                     }`}
                   />
                   {bannerText}
@@ -860,6 +1100,10 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                       <stop offset="0" stopColor="#f0a53c" />
                       <stop offset="1" stopColor="#ffd9a3" />
                     </linearGradient>
+                    <linearGradient id="hmiArcMint" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0" stopColor="#3fae86" />
+                      <stop offset="1" stopColor="#8fe6c2" />
+                    </linearGradient>
                   </defs>
                   <circle
                     cx="126"
@@ -894,7 +1138,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                     cy="126"
                     r={RING_R}
                     fill="none"
-                    stroke="url(#hmiArc)"
+                    stroke={
+                      relax.phase === 'on' && relax.run === null
+                        ? 'url(#hmiArcMint)'
+                        : 'url(#hmiArc)'
+                    }
                     strokeWidth="12"
                     strokeLinecap="round"
                     strokeDasharray={`${RING_C * RING_ARC * (relaxPct / 100)} ${RING_C}`}
@@ -938,13 +1186,23 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                     fontFamily="'Rajdhani', sans-serif"
                     fontSize="12"
                     letterSpacing="2.4"
-                    fill="#5fd6a4"
+                    fill={
+                      relax.phase === 'on' && relax.run === null
+                        ? '#5fd6a4'
+                        : relax.phase === 'partial'
+                          ? '#c9a273'
+                          : '#6f7f82'
+                    }
                   >
-                    {relaxPct > 99
-                      ? 'SEQUENCE COMPLETE'
-                      : running
-                        ? `ETA ${etaMax.toFixed(1)} s`
-                        : 'STANDBY'}
+                    {relax.run === 'on'
+                      ? `APPLYING · ${etaMax.toFixed(1)}s`
+                      : relax.run === 'off'
+                        ? `RESTORING · ${etaMax.toFixed(1)}s`
+                        : relax.phase === 'on'
+                          ? 'SEQUENCE COMPLETE'
+                          : relax.phase === 'partial'
+                            ? 'PARTIAL · HOLDING'
+                            : 'STANDBY'}
                   </text>
                 </svg>
               </div>
@@ -980,38 +1238,20 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
               <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82] mt-5 mb-2">
                 Direction Rocker
               </p>
-              {mode === 'relaxation' ? (
-                <button
-                  type="button"
-                  onClick={() => handleRelaxButton(!relaxOn)}
-                  className={`w-full h-[86px] rounded-[10px] border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    relaxOn
-                      ? 'border-[#5fd6a4]/50 bg-[#5fd6a4]/10 text-[#8fe6c2]'
-                      : 'border-white/[.12] text-[#93a2a4] hover:border-[#f0a53c]/60 hover:text-[#ffc276]'
-                  }`}
-                >
-                  <span className="font-hmi-cond text-[26px] font-bold leading-none">
-                    {relaxOn ? 'OFF' : 'ON'}
-                  </span>
-                  <span className="text-[9.5px] tracking-[.22em] uppercase">
-                    {relaxOn ? 'Restore Snapshot' : 'Apply Relax Pose'}
-                  </span>
-                </button>
-              ) : (
-                <div className="grid grid-cols-3 gap-2">
-                  <span />
-                  {rockerKey('up', '▲')}
-                  <span />
-                  {rockerKey('left', '◀')}
-                  <span className="flex items-center justify-center rounded-[10px] border border-white/[.06] text-[9px] tracking-[.18em] uppercase text-[#4f5c5f]">
-                    HOLD
-                  </span>
-                  {rockerKey('right', '▶')}
-                  <span />
-                  {rockerKey('down', '▼')}
-                  <span />
-                </div>
-              )}
+              {/* 로커는 8개 드라이브 모드 전용 — 릴렉스는 좌측 프리셋 레이어에서 조작한다 */}
+              <div className="grid grid-cols-3 gap-2">
+                <span />
+                {rockerKey('up', '▲')}
+                <span />
+                {rockerKey('left', '◀')}
+                <span className="flex items-center justify-center rounded-[10px] border border-white/[.06] text-[9px] tracking-[.18em] uppercase text-[#4f5c5f]">
+                  HOLD
+                </span>
+                {rockerKey('right', '▶')}
+                <span />
+                {rockerKey('down', '▼')}
+                <span />
+              </div>
 
               <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82] mt-5 mb-2">
                 Sequence Log

@@ -207,17 +207,47 @@ export const AXIS_CONFIG: Record<AxisKey, AxisConfig> = {
 };
 
 
+/**
+ * 로커(4방향)로 조작하는 드라이브 모드 순서 — 화면 상단 → 하단 = C1 → C8
+ *
+ * 정렬 근거 (우선순위 순)
+ *  1. 흔한 기능이 상위 : 양산 시트의 필수 사양(시트 전체 이동 · 등받이 각도 · 럼버)을 앞에,
+ *                       프리미엄 사양(쿠션 신장 · 틸트 · 레그레스트)을 뒤에 둔다.
+ *  2. 오래된 기술이 상위 : 같은 군 안에서는 먼저 실용화된 축부터 (slide→height,
+ *                       recline→lumber→bolster, cushion→tilt→legrest).
+ *  3. 물리적으로 비슷한 기능 근접 : 시트가 움직이는 부위 기준으로 3개 군
+ *     ① 시트 전체 이동  C1 슬라이드 · C2 하이트
+ *     ② 등받이          C3 리클라이너 · C4 럼버 · C5 볼스터
+ *     ③ 방석 전방       C6 쿠션 신장 · C7 틸트 · C8 레그레스트
+ *
+ * 릴렉스는 다른 모드와 동일 선상에 놓지 않는다.
+ * 특정 축을 조작하는 모드가 아니라, 직전 포즈를 스냅샷으로 두고 6축에 한꺼번에
+ * 겹쳐지는 **독립 프리셋 레이어** 이므로 MODE_ORDER 에서 제외하고
+ * RELAX_PRESET_KEY 로 따로 다룬다.
+ */
 export const MODE_ORDER: ModeKey[] = [
-  'tilt',
-  'legrest',
-  'cushion',
-  'bolster',
-  'recline',
-  'height',
-  'lumber',
-  'slide',
-  'relaxation',
+  'slide', // C1  시트 전체 전/후
+  'height', // C2  시트 전체 상/하
+  'recline', // C3  등받이 각도
+  'lumber', // C4  등받이 안쪽 럼버 (전후 + 상하)
+  'bolster', // C5  등받이 좌우 윙
+  'cushion', // C6  방석 전방 신장
+  'tilt', // C7  방석 앞단 경사
+  'legrest', // C8  방석에서 전개되는 종아리 받침
 ];
+
+/**
+ * 화면 표시용 조작 코드 (C1~C8)
+ * — 배열 순서가 그대로 코드 번호가 된다. `MODE_CONFIG[].status` 는 DPSS 신호값(0x15A)이라
+ *    표시 코드와 일부러 분리했다 (프로토콜 값은 순서와 무관하게 고정).
+ */
+export function modeCode(modeKey: ModeKey): string {
+  const idx = MODE_ORDER.indexOf(modeKey);
+  return idx >= 0 ? `C${idx + 1}` : 'C—';
+}
+
+/** 릴렉스 프리셋 레이어 키 (DPSS Mode 09) — 모드 트랙이 아닌 프리셋 패널에서 조작한다 */
+export const RELAX_PRESET_KEY: ModeKey = 'relaxation';
 
 export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {
   tilt: {
@@ -302,7 +332,10 @@ export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {
     subName: 'Relaxation Preset',
     lrAxis: 'relaxation_return',
     udAxis: null,
-    desc: { ko: 'On: 릴렉션 포즈 적용 / Off: 직전 값 복귀', en: 'On: apply relax pose / Off: restore' },
+    desc: {
+      ko: '드라이브 모드가 아닌 독립 프리셋 레이어 — On: 릴렉션 포즈 / Off: 스냅샷 복귀',
+      en: 'Standalone preset layer (not a drive mode) — On: relax pose / Off: restore snapshot',
+    },
   },
 };
 
@@ -396,6 +429,44 @@ export const RELAX_ON_TARGETS: Partial<Record<AxisKey, number>> = {
 /** 릴렉스 On/Off 로 구동되는 축 목록 */
 export const RELAX_ON_AXES = Object.keys(RELAX_ON_TARGETS) as AxisKey[];
 
+/** 릴렉스 시퀀스에 포함되는 전체 축 (프리셋 축 + 적용률 축) */
+export const RELAX_SEQUENCE_AXES: AxisKey[] = [...RELAX_ON_AXES, 'relaxation_return'];
+
+/**
+ * 릴렉스 프리셋 상태 (3상태)
+ *  - off     : 해제 (적용률 0% / 스냅샷 없음)
+ *  - on      : 릴렉션 포즈 100% 적용 완료
+ *  - partial : 100% 도달 전에 중단됨 — ON 도 OFF 도 아닌 중간 상태
+ *              (이동 중 모드 전환이나 수동 조작이 들어오면 이 상태로 빠진다)
+ */
+export type RelaxPhase = 'off' | 'on' | 'partial';
+
+/** 지금 이동 중인 시퀀스의 방향 (정지 중이면 null) */
+export type RelaxRun = 'on' | 'off' | null;
+
+export interface RelaxStatus {
+  /** 확정된 상태 (이동 중에는 도착 후 확정될 값) */
+  phase: RelaxPhase;
+  /** 이동 방향 — null 이면 정지 상태 */
+  run: RelaxRun;
+}
+
+/** 상태 표시 라벨 (chip · 배너 · 링 하단용) */
+export const RELAX_STATE_LABEL: Record<RelaxPhase | 'run-on' | 'run-off', LocalizedText> = {
+  off: { ko: 'OFF', en: 'OFF' },
+  on: { ko: 'ON', en: 'ON' },
+  partial: { ko: '부분 적용', en: 'PARTIAL' },
+  'run-on': { ko: '적용 중', en: 'APPLYING' },
+  'run-off': { ko: '복귀 중', en: 'RESTORING' },
+};
+
+/** 이동 중이면 run 을 우선한 표시 상태 키 */
+export function relaxStateKey(status: RelaxStatus): RelaxPhase | 'run-on' | 'run-off' {
+  if (status.run === 'on') return 'run-on';
+  if (status.run === 'off') return 'run-off';
+  return status.phase;
+}
+
 export interface RelaxPresetResult {
   /** 갱신할 축 목표값 */
   targets: Partial<Record<AxisKey, number>>;
@@ -405,7 +476,8 @@ export interface RelaxPresetResult {
 
 /**
  * 릴렉스 On/Off 프리셋 계산 (순수 함수)
- *  On  : 현재 값 스냅샷 저장(처음 On 일 때만) + RELAX_ON_TARGETS 목표 / 릴렉스 100%
+ *  On  : 현재 값 스냅샷 저장(스냅샷이 없을 때만) + RELAX_ON_TARGETS 목표 / 릴렉스 100%
+ *        — 부분 적용(PARTIAL) 상태에서 다시 On 을 누르면 스냅샷을 유지한 채 100% 까지 재개한다
  *  Off : 스냅샷 값으로 복귀(스냅샷 없으면 초기값) / 릴렉스 0%
  */
 export function relaxPreset(

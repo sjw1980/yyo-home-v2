@@ -338,8 +338,8 @@ export const translations: TranslationDictionary = {
     en: "DPSS Power Seat Control Simulator"
   },
   "Seat Simulator Subtitle": {
-    ko: "운전석 시트 조작기(DPSS)의 9개 조작 모드와 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 좌측 모드 트랙에서 모드를 고르고 우측 로커를 누른 채 유지하면 시트 형상과 릴렉스 타깃 고스트가 실시간으로 갱신됩니다.",
-    en: "Drive all 9 control modes and 10 seat axes through a virtual motor physics model — pick a mode in the left track and press-and-hold the direction rocker; the seat geometry and the relax target ghost update in real time."
+    ko: "운전석 시트 조작기(DPSS)의 8개 조작 모드(C1~C8)와 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 좌측 모드 트랙에서 모드를 고르고 우측 로커를 누른 채 유지하면 시트 형상이 실시간으로 갱신되고, 릴렉스는 모드가 아닌 독립 프리셋 레이어로 어떤 모드에서든 6축에 겹쳐 동작합니다.",
+    en: "Drive all 8 control modes (C1~C8) and 10 seat axes through a virtual motor physics model — pick a mode in the left track and press-and-hold the rocker to reshape the seat in real time. Relax is not a mode but a standalone preset layer that overlays 6 axes from any mode."
   },
   "Seat Mode Panel": {
     ko: "조작 모드 선택 (MODE SELECT)",
@@ -354,8 +354,8 @@ export const translations: TranslationDictionary = {
     en: "LIVE AXIS MONITOR"
   },
   "Seat Control Hint": {
-    ko: "모드 트랙에서 모드를 선택한 뒤 로커 방향 키를 누른 상태로 유지하면 해당 축이 연속 조작됩니다. 릴렉스 모드는 On(릴렉션 포즈 적용) / Off(직전 스냅샷 복귀) 프리셋으로 조작됩니다. 패널을 클릭한 뒤 방향키 · Q·E(모드 전환) · Space(AUTO DEMO)로도 조작할 수 있습니다.",
-    en: "Select a mode in the track, then press and hold a rocker key to drive that axis. The Relax mode works as an On (apply relax pose) / Off (restore snapshot) preset. Focus the panel and use Arrow keys · Q·E (change mode) · Space (AUTO DEMO)."
+    ko: "모드 트랙에서 모드를 선택한 뒤 로커 방향 키를 누른 상태로 유지하면 해당 축이 연속 조작됩니다. 릴렉스는 모드와 동급이 아닌 독립 프리셋 레이어입니다 — On 은 현재 6축을 스냅샷으로 저장하고 릴렉션 포즈를 100% 까지 적용하고, Off 는 그 스냅샷으로 복귀합니다. 100% 도달 전에 모드 전환이나 수동 조작이 들어오면 시퀀스가 멈추고 ON 도 OFF 도 아닌 '부분 적용(PARTIAL)' 상태로 남으며, 다시 On 을 누르면 100% 까지 이어서 적용합니다. 패널을 클릭한 뒤 방향키 · Q·E(모드 전환) · R(릴렉스 On/Off) · Space(AUTO DEMO)로도 조작할 수 있습니다.",
+    en: "Select a mode in the track, then press and hold a rocker key to drive that axis. Relax is a standalone preset layer, not a peer mode: On saves the current 6 axes as a snapshot and drives the relax pose to 100%, Off restores that snapshot. Interrupt the sequence with a mode change or manual rocker input before it reaches 100% and it freezes in PARTIAL — neither ON nor OFF; pressing On again resumes to 100%. Focus the panel and use Arrow keys · Q·E (change mode) · R (relax On/Off) · Space (AUTO DEMO)."
   },
   "Seat Reset Pose": {
     ko: "전 축 초기 위치로 리셋",
