@@ -429,9 +429,6 @@ export const RELAX_ON_TARGETS: Partial<Record<AxisKey, number>> = {
 /** 릴렉스 On/Off 로 구동되는 축 목록 */
 export const RELAX_ON_AXES = Object.keys(RELAX_ON_TARGETS) as AxisKey[];
 
-/** 릴렉스 시퀀스에 포함되는 전체 축 (프리셋 축 + 적용률 축) */
-export const RELAX_SEQUENCE_AXES: AxisKey[] = [...RELAX_ON_AXES, 'relaxation_return'];
-
 /**
  * 릴렉스 프리셋 상태 (3상태)
  *  - off     : 해제 (적용률 0% / 스냅샷 없음)
@@ -476,19 +473,20 @@ export interface RelaxPresetResult {
 
 /**
  * 릴렉스 On/Off 프리셋 계산 (순수 함수)
- *  On  : 현재 값 스냅샷 저장(스냅샷이 없을 때만) + RELAX_ON_TARGETS 목표 / 릴렉스 100%
+ *  On  : 현재 값 스냅샷 저장(스냅샷이 없을 때만) + RELAX_ON_TARGETS 목표
  *        — 부분 적용(PARTIAL) 상태에서 다시 On 을 누르면 스냅샷을 유지한 채 100% 까지 재개한다
- *  Off : 스냅샷 값으로 복귀(스냅샷 없으면 초기값) / 릴렉스 0%
+ *  Off : 스냅샷 값으로 복귀(스냅샷 없으면 초기값)
+ *
+ * `relaxation_return`(RLX) 은 여기에서 목표를 주지 않는다 — 모터를 돌리는 축이 아니라
+ * 6축의 실제 포즈 진행률을 나타내는 **파생 신호** 이므로 시뮬레이션 틱에서
+ * relaxApplyRatio() 로 계산해 채운다.
  */
 export function relaxPreset(
   positions: Record<AxisKey, number>,
   snapshot: Partial<Record<AxisKey, number>> | null,
   on: boolean,
 ): RelaxPresetResult {
-  const relaxConf = AXIS_CONFIG.relaxation_return;
-  const targets: Partial<Record<AxisKey, number>> = {
-    relaxation_return: on ? relaxConf.max : relaxConf.min,
-  };
+  const targets: Partial<Record<AxisKey, number>> = {};
 
   if (on) {
     RELAX_ON_AXES.forEach((k) => {
@@ -508,6 +506,38 @@ export function relaxPreset(
     targets[k] = snapshot?.[k] ?? INITIAL_POSITIONS[k];
   });
   return { targets, snapshot: null };
+}
+
+/**
+ * 릴렉스 프리셋 적용률 (0~100) — RLX 축 값을 그대로 쓰지 않고 6축의 **실제 포즈** 로 계산한다.
+ *
+ *  기준선 : OFF 포즈(스냅샷) = 0 → RELAX_ON_TARGETS(릴렉션 포즈) = 100
+ *  집계   : 축별 **이동 시간** [|거리| / 모터 속도] 의 **최대값** = 가장 오래 걸리는 축
+ *
+ * ⚠ 최소값(min) 집계는 방향마다 다른 축을 붙잡아 시간이 어긋난다.
+ *    On  : 진행률이 0에서 시작 → 가장 늦게 도착하는 축(리클라이너 3.0s)이 최소 → 3.0s 에 100% ✓
+ *    Off : 진행률이 1에서 감소 → 가장 **빨리** 도착하는 축(쿠션 2.0s)이 최소 → 1.0s 먼저 0% ✗
+ *    이동 시간을 기준으로 하면 On/Off 모두 전 축이 도착하는 시점에 정확히 100%/0% 가 된다.
+ */
+export function relaxApplyRatio(
+  positions: Record<AxisKey, number>,
+  offPose: Partial<Record<AxisKey, number>> | null,
+): number {
+  if (!offPose) return 0;
+
+  let total = 0; // OFF 포즈 → 릴렉션 포즈 전 구간 중 최장 이동 시간
+  let done = 0; // OFF 포즈 → 현재 포즈까지의 최장 이동 시간
+  RELAX_ON_AXES.forEach((k) => {
+    const speed = AXIS_CONFIG[k].speed;
+    if (speed <= 0) return;
+    const off = offPose[k] ?? INITIAL_POSITIONS[k];
+    const on = RELAX_ON_TARGETS[k] ?? off;
+    total = Math.max(total, Math.abs(on - off) / speed);
+    done = Math.max(done, Math.abs(positions[k] - off) / speed);
+  });
+
+  if (total < 0.05) return 100; // 이동할 축이 없다 = 이미 릴렉션 포즈
+  return clamp((done / total) * 100, 0, 100);
 }
 
 /** 조작 방향 → 대상 축 매핑 (기존 기능 = 좌우, 병합 기능 = 상하) */

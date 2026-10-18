@@ -8,13 +8,14 @@ import {
   MODE_CONFIG,
   MODE_ORDER,
   MODE_SPEC_LABELS,
-  RELAX_SEQUENCE_AXES,
+  RELAX_ON_AXES,
   RELAX_STATE_LABEL,
   axisForDirection,
   clamp,
   lrSign,
   modeCode,
   primaryAxis,
+  relaxApplyRatio,
   relaxPreset,
   relaxStateKey,
   rotateMode,
@@ -80,6 +81,13 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const keyHeldRef = useRef<Set<string>>(new Set());
   const relaxSnapshotRef = useRef<Partial<Record<AxisKey, number>> | null>(null);
   /**
+   * 적용률(RLX) 0% 기준선이 되는 OFF 포즈
+   * — On 직전 포즈, Off 중에는 복귀 대상 포즈(복귀가 끝날 때까지 유지)
+   */
+  const relaxOffRef = useRef<Partial<Record<AxisKey, number>> | null>(null);
+  /** 이번 릴렉스 명령의 시작 지점 (코리오그래피 이동 구간 표시용 — Off 복귀 구간도 포함) */
+  const relaxFromRef = useRef<Partial<Record<AxisKey, number>> | null>(null);
+  /**
    * 릴렉스 On/Off 프리셋으로 "이동 중"인 축集合
    * — 타깃(노란) 마커는 이 축들에 대해서만 표시한다 (수동/AUTO 조작 중에는 목표=현재라 무의미)
    */
@@ -132,13 +140,23 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
 
     const prev = relaxRef.current;
     const hadSnapshot = relaxSnapshotRef.current !== null;
+    const prevSnapshot = relaxSnapshotRef.current;
     const result = relaxPreset(posRef.current, relaxSnapshotRef.current, on);
     Object.assign(tgtRef.current, result.targets);
     relaxSnapshotRef.current = result.snapshot;
+    // 적용률 0% 기준선 — On 은 직전 포즈, Off 는 복귀 대상 포즈 (복귀 완료까지 유지)
+    relaxOffRef.current = on ? result.snapshot : prevSnapshot;
+
+    // 이번 명령의 시작 지점 기록 (코리오그래피가 Off 복귀 구간도 올바르게 그리도록)
+    const from: Partial<Record<AxisKey, number>> = {};
+    RELAX_ON_AXES.forEach((k) => {
+      from[k] = posRef.current[k];
+    });
+    relaxFromRef.current = from;
 
     // 이동이 실제로 발생하는 축만 타깃 마커 대상으로 등록 (Off 시 스냅샷 복귀 구간 포함)
     const moving = new Set<AxisKey>();
-    RELAX_SEQUENCE_AXES.forEach((k) => {
+    RELAX_ON_AXES.forEach((k) => {
       const target = result.targets[k];
       if (target !== undefined && Math.abs(target - posRef.current[k]) > 0.05) moving.add(k);
     });
@@ -147,7 +165,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     if (on) {
       pushLog(
         prev.phase === 'partial'
-          ? `RELAX RESUME · ${Math.round(clamp(posRef.current.relaxation_return, 0, 100))}% → 100%`
+          ? `RELAX RESUME · ${Math.round(relaxApplyRatio(posRef.current, relaxOffRef.current))}% → 100%`
           : hadSnapshot
             ? 'RELAX ON · TARGET 100% (6AX)'
             : 'RELAX ON · SNAPSHOT SAVED (6AX)',
@@ -170,11 +188,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
    */
   const interruptRelaxSequence = (reason: string) => {
     if (relaxRef.current.run === null) return;
-    RELAX_SEQUENCE_AXES.forEach((k) => {
+    RELAX_ON_AXES.forEach((k) => {
       tgtRef.current[k] = posRef.current[k];
     });
     relaxAxesRef.current = new Set();
-    const pct = Math.round(clamp(posRef.current.relaxation_return, 0, 100));
+    const pct = Math.round(relaxApplyRatio(posRef.current, relaxOffRef.current));
     setRelax('partial', null);
     pushLog(`RELAX INTERRUPTED · ${pct}% PARTIAL · ${reason}`, 'hot');
   };
@@ -231,6 +249,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     modeRef.current = MODE_ORDER[0];
     setMode(MODE_ORDER[0]);
     relaxSnapshotRef.current = null;
+    relaxOffRef.current = null;
+    relaxFromRef.current = null;
     relaxAxesRef.current = new Set();
     setRelax('off', null);
     pushLog('POSE RESET · INITIAL VALUES', 'ok');
@@ -405,6 +425,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     // 릴렉스 시퀀스 이동 완료 → 상태를 확정한다 (이동 중에는 run 라벨이 우선 표시됨)
     if (relaxAxesRef.current.size === 0 && relaxRef.current.run !== null) {
       const settled = relaxRef.current.phase;
+      // OFF 복귀까지 끝나면 적용률 기준선을 내린다 (이후 RLX = 0 으로 고정)
+      if (settled === 'off') relaxOffRef.current = null;
       setRelax(settled, null);
       pushLog(
         settled === 'on'
@@ -413,6 +435,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
         settled === 'on' ? 'ok' : 'dim',
       );
     }
+
+    // RLX(적용률) 는 모터를 돌리는 축이 아니라 파생 신호 — 6축의 실제 포즈 진행률을 반영한다
+    const applyRatio = relaxApplyRatio(pos, relaxOffRef.current);
+    pos.relaxation_return = applyRatio;
+    tgt.relaxation_return = applyRatio;
 
     // 조작 중 타깃 갱신 (ref: _execute_direction_step — 40ms 명령 스텝, 하드 리밋만 적용)
     const press = pressRef.current;
@@ -652,7 +679,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const choreo = CHOREO_AXES.map((k) => {
     const conf = AXIS_CONFIG[k];
     const span = conf.max - conf.min;
-    const from = relaxSnapshotRef.current?.[k] ?? INITIAL_POSITIONS[k];
+    const from =
+      relaxFromRef.current?.[k] ?? relaxSnapshotRef.current?.[k] ?? INITIAL_POSITIONS[k];
     const to = tgt[k];
     const travel = Math.abs(to - from);
     const progress = travel < 0.05 ? 0 : clamp((pos[k] - from) / (to - from), 0, 1);
@@ -671,10 +699,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     };
   });
 
-  const etaMax = Math.max(
-    0,
-    ...[...CHOREO_AXES, 'relaxation_return' as AxisKey].map((k) => etaOf(k)),
-  );
+  const etaMax = Math.max(0, ...CHOREO_AXES.map((k) => etaOf(k)));
   /** 배너 톤 — 이동 중(앰버) / 릴렉스 포즈 유지(민트) / 부분 적용(딤앰버) / 유휴(그레이) */
   const running = ghostPose || (activeAxis !== null && etaOf(activeAxis) > 0);
   const bannerTone: 'run' | 'hold' | 'partial' | 'idle' = running
