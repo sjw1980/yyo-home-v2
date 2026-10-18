@@ -25,6 +25,9 @@ import {
   RELAX_ON_TARGETS,
   RELAX_STATE_LABEL,
   axisForDirection,
+  barAnchorRight,
+  barFillPct,
+  barPct,
   capturePose,
   clamp,
   lrSign,
@@ -70,10 +73,15 @@ const DIR_CHEVRON: Record<Direction, typeof ChevronUp> = {
   right: ChevronRight,
 };
 /**
- * 방향 버튼 배치 순서 — **위쪽의 축별 위치 바와 같은 자리에 놓는다.**
- *  좌우 축(lrAxis) 을 조작하는 버튼을 좌측, 상하 축(udAxis) 을 조작하는 버튼을 우측.
- *  럼버(4방향) 는 바가 `LMB | LMH` 순서이므로 버튼도 `◀ ▶ | ▲ ▼` 가 그 아래에 나란히 선다.
+ * 방향 버튼 배치 순서 — **C1~C8 전부 동일하게 `◀ ▶ ▲ ▼`** (화살표 = 시트 도해의 물리 방향)
+ *  좌우 축(lrAxis) 을 조작하는 버튼을 좌측, 상하 축(udAxis) 을 조작하는 버튼을 우측에 두면
+ *  럼버(4방향) 의 `LMB | LMH` 두 바가 자기 버튼 위에 그대로 얹힌다(`◀전진 ▶후진 | ▲상단 ▼하단`).
  *  (2버튼 컨트롤은 상대 순서가 그대로라 표시가 변하지 않는다: 상하 전용 = ▲▼, 좌우 전용 = ◀▶)
+ *
+ *  이 순서에 맞춘 바 규칙 (좌표 정본 = seatConfig.barAnchorRight / barFillPct / barPct):
+ *   **바는 '증가 버튼이 놓인 쪽'으로 자란다** = 누른 버튼 쪽으로 바 끝이 움직인다.
+ *   ◀ = 증가 축(쿠션·볼스터·럼버 전후) 과 ▲ = 증가 축(하이트·틸트·레그레스트·럼버 상하) 은
+ *   첫 칸(좌측)이 증가이므로 바도 우측에 걸려 좌측으로 뻗고, ▶ = 증가 축(슬라이드·리클라이너) 은 좌측 기준이다.
  */
 const DIR_ORDER: Direction[] = ['left', 'right', 'up', 'down'];
 
@@ -763,18 +771,28 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const tgt = tgtRef.current;
   const focusAxis: AxisKey = activeAxis ?? primaryAxis(mode);
   const focusConf = AXIS_CONFIG[focusAxis];
-  /** 축 → 트래블 바 좌표 (%) — 포커스 축(큰 바)과 둘째 축(보조 바)이 같은 공식을 공유한다 */
+  /**
+   * 축 → 트래블 바 좌표 (%) — 포커스 축(큰 바)과 둘째 축(보조 바)이 같은 공식을 공유한다.
+   *  `fill` : 충전 길이(%) — 기준 변에서 현재 값까지. 미러와 무관하게 min→현재값 비율.
+   *  `tgtPct` / `soft*` : 트랙 좌표(%) — `barPct()` 가 축별로 미러링하므로 **증가 버튼이 좌측 칸인
+   *  축(쿠션 · 볼스터 · 럼버 전후 · 하이트 · 틸트 · 레그레스트 · 럼버 상하)** 은 좌우가 뒤집혀
+   *  좌측 = 증가 방향이 된다.
+   *  충전 레이어는 `anchorRight` 쪽에 걸리고 반대편으로 뻗는다 → 바 끝이 화살표 방향으로 움직인다.
+   */
   const travelOf = (axis: AxisKey) => {
     const conf = AXIS_CONFIG[axis];
-    const axisSpan = conf.max - conf.min;
+    const softA = barPct(axis, conf.softMin);
+    const softB = barPct(axis, conf.softMax);
     return {
-      pct: ((pos[axis] - conf.min) / axisSpan) * 100,
-      tgtPct: ((tgt[axis] - conf.min) / axisSpan) * 100,
-      softLeft: ((conf.softMin - conf.min) / axisSpan) * 100,
-      softRight: ((conf.softMax - conf.min) / axisSpan) * 100,
+      fill: barFillPct(axis, pos[axis]),
+      tgtPct: barPct(axis, tgt[axis]),
+      softLeft: Math.min(softA, softB),
+      softRight: Math.max(softA, softB),
+      anchorRight: barAnchorRight(axis),
     };
   };
-  const { pct, tgtPct, softLeft, softRight } = travelOf(focusAxis);
+  const { fill, tgtPct, softLeft, softRight, anchorRight: focusReversed } =
+    travelOf(focusAxis);
 
   const fmtAxis = (axis: AxisKey, value: number) =>
     `${value.toFixed(AXIS_CONFIG[axis].unit === '°' ? 1 : 0)}${AXIS_CONFIG[axis].unit}`;
@@ -1162,21 +1180,31 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const CHOREO_AXES: AxisKey[] = ['recline', 'legrest', 'cushion', 'tilt', 'slide', 'height'];
   const choreo = CHOREO_AXES.map((k) => {
     const conf = AXIS_CONFIG[k];
-    const span = conf.max - conf.min;
     const from =
       relaxFromRef.current?.[k] ?? relaxSnapshotRef.current?.[k] ?? INITIAL_POSITIONS[k];
     const to = tgt[k];
     const travel = Math.abs(to - from);
     const progress = travel < 0.05 ? 0 : clamp((pos[k] - from) / (to - from), 0, 1);
     const state = travel < 0.05 ? 'idle' : progress >= 1 ? 'done' : progress > 0 ? 'run' : 'idle';
+    /**
+     * 코리오그래피도 모든 바와 **같은 좌표계(barPct)** 를 쓴다 — ◀ = 증가 축은
+     * 좌우가 뒤집힌 트랙이므로 이동 구간이 도해의 움직임과 같은 방향으로 그려진다.
+     *  유휴 : 기준 변(미러 축 = 우측) → 현재 값까지의 값 게이지
+     *  이동 : 시점 `from` → 현재 값까지의 이동 구간 (후진 이동도 시작점이 우측으로 안 어긋난다)
+     */
+    const fromPct = barPct(k, from);
+    const posPct = clamp(barPct(k, pos[k]), 0, 100);
+    const anchorRight = barAnchorRight(k);
     return {
       key: k,
       code: conf.code,
-      left: state === 'idle' ? 0 : ((Math.min(from, to) - conf.min) / span) * 100,
+      left: state === 'idle' ? (anchorRight ? posPct : 0) : Math.min(fromPct, posPct),
       width:
         state === 'idle'
-          ? clamp(((pos[k] - conf.min) / span) * 100, 0, 100)
-          : (Math.abs(pos[k] - from) / span) * 100,
+          ? anchorRight
+            ? 100 - posPct
+            : posPct
+          : Math.abs(posPct - fromPct),
       seconds: travel / conf.speed,
       remaining: etaOf(k),
       state,
@@ -1424,11 +1452,14 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                         <div className="flex gap-2 mt-1.5">
                           {axes.map((k) => {
                             const axisConf = AXIS_CONFIG[k];
-                            const ratio = clamp(
-                              ((pos[k] - axisConf.min) / (axisConf.max - axisConf.min)) * 100,
-                              0,
-                              100,
-                            );
+                            /**
+                             * 게이지 = `barFillPct()` 길이(%) + `barAnchorRight()` 기준 변 —
+                             * 증가 버튼이 첫 칸(좌측)인 축은 바가 우측에 걸려 좌측으로 뻗는다.
+                             * 그래서 **첫 칸 버튼(◀ 쿠션 신장 · 볼스터 조임 · ▲ 상승 · 올림 · 상단)을
+                             * 누르면 바 끝이 좌측으로, 둘째 칸 버튼(▶ ▼) 은 우측으로** 움직인다.
+                             */
+                            const ratio = clamp(barFillPct(k, pos[k]), 0, 100);
+                            const anchorRight = barAnchorRight(k);
                             const driven = selected && focusAxis === k;
                             return (
                               <div key={k} className="flex-1 min-w-0">
@@ -1453,9 +1484,13 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                                     </span>
                                   </div>
                                 )}
-                                <div className="h-[3px] rounded-full bg-white/[.07] overflow-hidden">
+                                <div className="h-[3px] rounded-full bg-white/[.07] overflow-hidden flex">
                                   <div
-                                    className="h-full rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
+                                    className={`h-full rounded-full ${
+                                      anchorRight
+                                        ? 'ml-auto bg-[linear-gradient(270deg,#f0a53c,#ffd9a3)]'
+                                        : 'bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]'
+                                    }`}
                                     style={{ width: `${ratio}%` }}
                                   />
                                 </div>
@@ -1603,9 +1638,14 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                     className="absolute inset-y-0 bg-white/[.06]"
                     style={{ left: `${softLeft}%`, width: `${Math.max(softRight - softLeft, 0)}%` }}
                   />
+                  {/* 현재 값 충전 — ◀ = 증가 축(focusReversed) 은 우측에 걸려 좌측으로 뻗는다 */}
                   <div
-                    className="absolute inset-y-0 left-0 rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
-                    style={{ width: `${clamp(pct, 0, 100)}%` }}
+                    className={`absolute inset-y-0 rounded-full ${
+                      focusReversed
+                        ? 'right-0 bg-[linear-gradient(270deg,#f0a53c,#ffd9a3)]'
+                        : 'left-0 bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]'
+                    }`}
+                    style={{ width: `${clamp(fill, 0, 100)}%` }}
                   />
                   {relaxAxesRef.current.has(focusAxis) && (
                     <div
@@ -1632,8 +1672,12 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                         }}
                       />
                       <i
-                        className="absolute inset-y-0 left-0 block rounded-full bg-[linear-gradient(90deg,rgba(240,165,60,.55),rgba(255,217,163,.55))]"
-                        style={{ width: `${clamp(secondary.pct, 0, 100)}%` }}
+                        className={`absolute inset-y-0 block rounded-full ${
+                          secondary.anchorRight
+                            ? 'right-0 bg-[linear-gradient(270deg,rgba(240,165,60,.55),rgba(255,217,163,.55))]'
+                            : 'left-0 bg-[linear-gradient(90deg,rgba(240,165,60,.55),rgba(255,217,163,.55))]'
+                        }`}
+                        style={{ width: `${clamp(secondary.fill, 0, 100)}%` }}
                       />
                       {relaxAxesRef.current.has(secondary.axis) && (
                         <i

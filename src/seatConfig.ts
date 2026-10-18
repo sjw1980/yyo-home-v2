@@ -570,6 +570,56 @@ export function modeAxes(modeKey: ModeKey): AxisKey[] {
 const LEFT_INCREASE_AXES: AxisKey[] = ['bolster', 'cushion', 'lumber'];
 
 /**
+ * 상하(U/D) 로 조작되는 축 = ▲ 조작에 수치가 증가하는 축 (하이트 · 틸트 · 레그레스트 · 럼버 상하).
+ * `lrSign()` 이 상(U) 을 항상 +1 로 보므로 MODE_CONFIG 의 udAxis 가 곧 이 목록이다 (전환 시 자동 반영).
+ */
+const UP_INCREASE_AXES: AxisKey[] = Array.from(
+  new Set(
+    Object.values(MODE_CONFIG)
+      .map((conf) => conf.udAxis)
+      .filter((k): k is AxisKey => k !== null),
+  ),
+);
+
+/**
+ * 위치 바(bar) 를 **우측 기준(우측 끝 = min)** 으로 그릴 축
+ *
+ * 통일 규칙은 하나다 — **바는 '증가 버튼이 놓인 쪽'으로 자란다** (누른 버튼 쪽으로 바 끝이 움직인다).
+ * 버튼 순서는 C1~C8 전부 `◀ ▶ ▲ ▼` 이므로 증가 버튼이 어느 칸에 있는지가 곧 바의 성장 방향이다.
+ *  - ◀ = 증가 축 (쿠션 신장 · 볼스터 조임 · 럼버 돌출) : 도해에서도 좌측(FWD)으로 움직인다
+ *  - ▲ = 증가 축 (하이트 · 틸트 · 레그레스트 · 럼버 상하) : ▲ 가 첫 칸(좌측)이므로 ◀ 와 같은 취급
+ *  → 두 경우 모두 바를 우측에 걸고 좌측으로 뻗게 그려야 버튼과 시선이 일치한다.
+ *  - ▶ = 증가 축 (슬라이드 · 리클라이너 후진) 은 반대로 좌측 기준이다.
+ *
+ * 방향 버튼이 없는 파생 신호 `relaxation_return`(RLX) 은 목록에 없다 — 0 → 100% 를 좌측부터 채운다.
+ */
+export function barAnchorRight(axisKey: AxisKey): boolean {
+  return LEFT_INCREASE_AXES.includes(axisKey) || UP_INCREASE_AXES.includes(axisKey);
+}
+
+/**
+ * 축 값 → **게이지 채움 길이(%)**. 기준 변(좌측 또는 우측) 에서 이 길이만큼 채워지므로
+ * 미러 축인지와 무관하게 항상 `min → 현재값` 의 비율이다. (0 = min, 100 = max)
+ */
+export function barFillPct(axisKey: AxisKey, value: number): number {
+  const conf = AXIS_CONFIG[axisKey];
+  return ((value - conf.min) / (conf.max - conf.min)) * 100;
+}
+
+/**
+ * 축 값 → **트랙 좌표(%, 트랙 좌측 끝 기준)** — 소프트 리밋 인벨로프 · 타깃 마커 ·
+ * 코리오그래피 이동 구간처럼 "바 위의 위치"를 계산할 때 쓰는 좌표 정본.
+ * 미러 축(`barAnchorRight`) 은 100 - ratio 로 뒤집혀 **좌측 = 증가 방향** 이 된다.
+ *
+ * ⚠ 충전 레이어의 `width` 는 여기 값이 아니라 `barFillPct()` 다 — 미러 축은 우측에 걸고
+ * 좌측으로 뻗으므로, 폭까지 뒤집으면 바가 반대 방향으로 움직인다.
+ */
+export function barPct(axisKey: AxisKey, value: number): number {
+  const ratio = barFillPct(axisKey, value);
+  return barAnchorRight(axisKey) ? 100 - ratio : ratio;
+}
+
+/**
  * 방향 조작 시 수치 부호 규칙 (seat_main._execute_direction_step 대응)
  *  - bolster / cushion / lumber 는 좌(L) 조작 시 수치 증가
  *    (세 축 모두 값이 커지면 화면에서 좌측(FWD)으로 움직이므로 버튼 방향과 시선이 일치한다)
