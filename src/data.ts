@@ -362,8 +362,8 @@ export const translations: TranslationDictionary = {
     en: "Reset All Axes to Center"
   },
   "Seat Disclaimer": {
-    ko: "물리 상수(가동범위·모터 속도·소프트 리밋)는 YYO DPSS 데스크톱 시뮬레이터와 동일하며, 실제 차량의 ECU·센서·안전 로직은 포함하지 않는 웹 데모입니다.",
-    en: "Physics constants (travel, motor speed, soft limits) mirror the YYO DPSS desktop simulator. This web demo contains no vehicle ECU, sensors or safety logic."
+    ko: "물리 상수(가동범위·모터 속도·소프트 리밋)가 구현되어 있으며, 실제 차량의 ECU·센서·안전 로직은 포함하지 않는 웹 데모입니다.",
+    en: "Physics constants (travel range, motor speed, soft limits) are implemented. This web demo contains no vehicle ECU, sensors or safety logic."
   },
 
   // Footer / Corporate Info
