@@ -338,8 +338,8 @@ export const translations: TranslationDictionary = {
     en: "DPSS Power Seat Control Simulator"
   },
   "Seat Simulator Subtitle": {
-    ko: "운전석 시트 조작기(DPSS)의 8개 조작 모드(C1~C8)와 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 좌측 모드 트랙에서 모드를 고르고 우측 로커를 누른 채 유지하면 시트 형상이 실시간으로 갱신되고, 릴렉스는 모드가 아닌 독립 프리셋 레이어로 어떤 모드에서든 6축에 겹쳐 동작합니다.",
-    en: "Drive all 8 control modes (C1~C8) and 10 seat axes through a virtual motor physics model — pick a mode in the left track and press-and-hold the rocker to reshape the seat in real time. Relax is not a mode but a standalone preset layer that overlays 6 axes from any mode."
+    ko: "운전석 시트 조작기(DPSS)의 8개 컨트롤(C1~C8)과 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 각 컨트롤 줄에 그 컨트롤이 가진 방향 버튼이 있습니다 — 누른 채 유지하면 시트 형상이 실시간으로 갱신되고, 릴렉스는 모드가 아닌 독립 프리셋 레이어로 어떤 컨트롤에서든 6축에 겹쳐 동작합니다.",
+    en: "Drive all 8 controls (C1~C8) and 10 seat axes through a virtual motor physics model — every control row carries its own direction buttons, so press and hold one to reshape the seat in real time. Relax is not a control but a standalone preset layer that overlays 6 axes from any control."
   },
   "Seat Mode Panel": {
     ko: "조작 모드 선택 (MODE SELECT)",

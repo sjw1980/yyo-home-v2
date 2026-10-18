@@ -58,55 +58,22 @@ const SLOT_FLASH_MS = 520;
 const SLOT_FINGER_AXES: AxisKey[] = ['recline', 'legrest', 'cushion', 'tilt', 'slide', 'height'];
 
 /**
- * 방향 로커 스킨 — 모드와 무관하게 4키의 **자리·크기·라벨을 고정**하기 위한 상수들.
- * 미매핑 방향을 자리표시자로 바꾸면(예전 방식) 모드마다 패드 모양이 달라져 손에 익지 않는다.
- * → 키는 항상 4개 그대로 두고, 쓰이지 않는 방향은 '어둠' 으로만 표현한다.
+ * 컨트롤 버튼 — 공용 방향 로커는 폐기했다.
+ * 각 컨트롤(C1~C8)이 **자기 축의 방향 버튼만** 자기 줄에 가진다.
+ * 라벨은 MODE_SPEC_LABELS 에서 주어(모드명)을 버리고 목적어만 남긴다 — '럼버 전진' → '전진'.
  */
-const ROCKER_CAPTION: Record<Direction, { ko: string; en: string }> = {
-  up: { ko: '올림', en: 'UP' },
-  down: { ko: '내림', en: 'DOWN' },
-  left: { ko: '전진', en: 'FWD' }, // 도해의 FWD = 좌측
-  right: { ko: '후퇴', en: 'AFT' },
-};
-const ROCKER_CHEVRON: Record<Direction, typeof ChevronUp> = {
+const DIR_CHEVRON: Record<Direction, typeof ChevronUp> = {
   up: ChevronUp,
   down: ChevronDown,
   left: ChevronLeft,
   right: ChevronRight,
 };
-/** 키 면(面)의 빛 — 로커가 향하는 가장자리로 하이라이트가 몰린다 */
-const ROCKER_FACE: Record<Direction, string> = {
-  up: 'bg-[linear-gradient(0deg,rgba(255,255,255,.015),rgba(255,255,255,.085))]',
-  down: 'bg-[linear-gradient(180deg,rgba(255,255,255,.015),rgba(255,255,255,.085))]',
-  left: 'bg-[linear-gradient(270deg,rgba(255,255,255,.015),rgba(255,255,255,.085))]',
-  right: 'bg-[linear-gradient(90deg,rgba(255,255,255,.015),rgba(255,255,255,.085))]',
-};
-/** 눌림 빛 — 방향 쪽에서 앰버가 번진다 */
-const ROCKER_GLOW: Record<Direction, string> = {
-  up: 'bg-[radial-gradient(120%_85%_at_50%_0%,rgba(240,165,60,.5),rgba(240,165,60,.05)_72%)]',
-  down: 'bg-[radial-gradient(120%_85%_at_50%_100%,rgba(240,165,60,.5),rgba(240,165,60,.05)_72%)]',
-  left: 'bg-[radial-gradient(85%_120%_at_0%_50%,rgba(240,165,60,.5),rgba(240,165,60,.05)_72%)]',
-  right: 'bg-[radial-gradient(85%_120%_at_100%_50%,rgba(240,165,60,.5),rgba(240,165,60,.05)_72%)]',
-};
-/** 이중 쉐브론 배치(세로 = 상하 / 가로 = 좌우)와 두 번째 쉐브론을 앞쪽에 겹치는 마진 */
-const ROCKER_STACK: Record<Direction, string> = {
-  up: 'flex-col',
-  down: 'flex-col',
-  left: 'flex-row',
-  right: 'flex-row',
-};
-const ROCKER_TUCK: Record<Direction, string> = {
-  up: '-mt-[4px]',
-  down: '-mt-[4px]',
-  left: '-ml-[4px]',
-  right: '-ml-[4px]',
-};
-/** 눌렸을 때 로커가 그 방향으로 살짝 기운다 */
-const ROCKER_NUDGE: Record<Direction, string> = {
-  up: 'translate-y-[1px]',
-  down: '-translate-y-[1px]',
-  left: 'translate-x-[1px]',
-  right: '-translate-x-[1px]',
+const DIR_ORDER: Direction[] = ['up', 'down', 'left', 'right'];
+
+/** '럼버 전진' → '전진' (버튼에는 목적어만, 전체 문구는 title 에 남긴다) */
+const shortDirLabel = (text: string) => {
+  const i = text.indexOf(' ');
+  return i > 0 ? text.slice(i + 1) : text;
 };
 
 
@@ -365,9 +332,11 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     setFrame((f) => f + 1);
   };
 
-  const handlePress = (dir: Direction) => {
+  const handlePress = (dir: Direction, fromMode?: ModeKey) => {
     // 수동 조작 시작 시 AUTO DEMO 정지
     if (controlModeRef.current === 'auto') setControlMode('manual');
+    // 컨트롤의 버튼을 누르면 그 컨트롤이 곧 현재 조작 대상이 된다
+    if (fromMode && fromMode !== modeRef.current) selectMode(fromMode);
     // 수동 오버라이드 = 릴렉스 시퀀스 중단 (100% 이전이면 부분 적용 상태로 유지)
     interruptRelaxSequence('MANUAL OVERRIDE');
     // 슬롯 호출로 이동 중이었으면 그 연결도 함께 끊는다 (슬롯은 계속 시트를 쫓지 않는다)
@@ -809,103 +778,52 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   };
 
   /**
-   * 4방향 로커 키 — 모드에 상관없이 **같은 자리 · 같은 크기 · 같은 라벨**을 유지한다.
-   * 이 모드에서 쓰이지 않는 방향도 키를 지우지 않고 어둡게만 둔다(예전엔 자리표시자로
-   * 바꿔 럼버만 4키·나머지 2키로 패드가 매번 달라졌다).
-   *  - 라벨은 고정 방향어(올림/내림/전진/후퇴), 모드별 실제 기능은 title 툴팁에 둔다
-   *  - 면(面)은 로커가 향하는 가장자리로 빛이 몰리고, 눌리면 그쪽에서 앰버가 번진다
+   * 컨트롤 안 방향 버튼 — 그 컨트롤이 가진 방향만 생성된다(MODE_SPEC_LABELS 가 null 인 방향은 만들지 않는다).
+   *  - 누르는 동안 연속 조작(pointerdown → pointerup/leave)
+   *  - 다른 컨트롤의 버튼을 누르면 그 컨트롤로 전환된 뒤 조작된다
+   *  - 버튼 라벨은 목적어만(전진/상승/조임…), 전체 문구는 title 툴팁
    */
-  const rockerKey = (dir: Direction) => {
-    const label = MODE_SPEC_LABELS[mode][dir];
-    const mapped = label !== null;
-    const active = pressed === dir;
-    const Chev = ROCKER_CHEVRON[dir];
+  const controlButton = (modeKey: ModeKey, dir: Direction) => {
+    const label = MODE_SPEC_LABELS[modeKey][dir];
+    if (!label) return null;
+    const active = pressed === dir && mode === modeKey;
+    const current = mode === modeKey;
+    const Chev = DIR_CHEVRON[dir];
     return (
       <button
         key={dir}
         type="button"
-        aria-disabled={!mapped}
-        title={
-          label
-            ? label[currentLang]
-            : currentLang === 'ko'
-              ? '이 모드에서는 조작하지 않는 방향입니다'
-              : 'Not mapped in this mode'
-        }
+        title={`${modeCode(modeKey)} · ${label[currentLang]}`}
+        aria-label={label[currentLang]}
+        aria-pressed={active}
         onPointerDown={(e) => {
           e.preventDefault();
-          if (mapped) handlePress(dir);
+          e.stopPropagation();
+          handlePress(dir, modeKey);
         }}
-        onPointerUp={() => handleRelease()}
+        onPointerUp={(e) => {
+          e.stopPropagation();
+          handleRelease();
+        }}
         onPointerLeave={() => {
           if (active) handleRelease();
         }}
-        className={`relative h-[32px] overflow-hidden rounded-[10px] border transition-all duration-150 select-none touch-none
+        className={`flex items-center justify-center gap-1 min-w-0 h-[24px] rounded-[8px] border transition-all duration-150 select-none touch-none cursor-pointer
           ${
             active
-              ? `scale-[.97] ${ROCKER_NUDGE[dir]} border-[#f0a53c]/70 text-[#ffe0b3] shadow-[0_0_18px_-4px_rgba(240,165,60,.75)]`
-              : mapped
-                ? 'border-white/[.10] text-[#aebcbc] hover:border-[#f0a53c]/55 hover:text-[#ffc276] cursor-pointer'
-                : 'border-white/[.05] text-[#3f4b4e]'
+              ? 'border-[#f0a53c]/70 bg-[rgba(240,165,60,.18)] text-[#ffe0b3] shadow-[0_0_14px_-4px_rgba(240,165,60,.85)]'
+              : current
+                ? 'border-white/[.13] bg-white/[.06] text-[#c9d6d7] hover:border-[#f0a53c]/60 hover:text-[#ffc276]'
+                : 'border-white/[.07] bg-white/[.025] text-[#7f8f92] hover:border-[#f0a53c]/45 hover:text-[#ffc276]'
           }`}
       >
-        {/* 면 쉐이딩 — 눌리기 전에는 방향 쪽 하이라이트만 */}
-        <i
-          className={`absolute inset-0 ${ROCKER_FACE[dir]} transition-opacity duration-150 ${
-            active ? 'opacity-0' : mapped ? 'opacity-100' : 'opacity-25'
-          }`}
-        />
-        {/* 눌림 — 방향 쪽에서 앰버가 번진다 */}
-        <i
-          className={`absolute inset-0 ${ROCKER_GLOW[dir]} transition-opacity duration-150 ${
-            active ? 'opacity-100' : 'opacity-0'
-          }`}
-        />
-        <span className="relative h-full flex flex-col items-center justify-center gap-[1px]">
-          <span className={`flex ${ROCKER_STACK[dir]} items-center leading-none`}>
-            <Chev className="w-[12px] h-[12px]" strokeWidth={2.4} />
-            <Chev className={`w-[12px] h-[12px] opacity-40 ${ROCKER_TUCK[dir]}`} strokeWidth={2.4} />
-          </span>
-          <span className="text-[6.5px] leading-none uppercase tracking-[.14em]">
-            {ROCKER_CAPTION[dir][currentLang]}
-          </span>
+        <Chev className="w-[12px] h-[12px] shrink-0" strokeWidth={2.6} />
+        <span className="text-[9.5px] leading-none tracking-[.04em] truncate">
+          {shortDirLabel(label[currentLang])}
         </span>
       </button>
     );
   };
-
-  /** 로커 중심 허브 — 누르는 동안만 점등되는 '홀드 중' 표시 (모드와 무관한 고정 요소) */
-  const rockerHub = () => (
-    <span className="flex items-center justify-center">
-      <span
-        className={`w-[34px] h-[34px] rounded-full border flex flex-col items-center justify-center gap-[1px] transition-all duration-150 ${
-          pressed
-            ? 'border-[#f0a53c]/45 bg-[radial-gradient(circle_at_50%_30%,rgba(240,165,60,.22),rgba(240,165,60,.04))] shadow-[0_0_14px_-4px_rgba(240,165,60,.85)]'
-            : 'border-white/[.09] bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,.10),rgba(255,255,255,.02))]'
-        }`}
-      >
-        <i
-          className={`w-[4px] h-[4px] rounded-full transition-all ${
-            pressed ? 'bg-[#f0a53c] shadow-[0_0_8px_#f0a53c]' : 'bg-[#4f5c5f]'
-          }`}
-        />
-        <span
-          className={`text-[6px] leading-none tracking-[.12em] uppercase ${
-            pressed ? 'text-[#ffc276]' : 'text-[#4f5c5f]'
-          }`}
-        >
-          HOLD
-        </span>
-      </span>
-    </span>
-  );
-
-  /** 패드 모서리 나사 머리 — 4개의 키가 한 몸의 로커로 읽히도록 채워 두는 고정 자리 */
-  const rockerCorner = (key: string) => (
-    <span key={key} className="flex items-center justify-center">
-      <i className="w-[4px] h-[4px] rounded-full bg-white/[.07] shadow-[inset_0_1px_1px_rgba(0,0,0,.65)]" />
-    </span>
-  );
 
   /**
    * 릴렉스 프리셋 버튼 — 드라이브 모드와 무관하게 항상 조작 가능한 레이어 컨트롤
@@ -1251,7 +1169,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
     };
   });
 
-  /** 현재 모드가 로커로 조작하는 축 (좌우 + 상하) — 텔레메트리 타일 강조·표기용 */
+  /** 현재 컨트롤이 조작하는 축 (좌우 + 상하) — 텔레메트리 타일 강조·표기용 */
   const drivenAxes = [MODE_CONFIG[mode].lrAxis, MODE_CONFIG[mode].udAxis].filter(
     (k): k is AxisKey => k !== null,
   );
@@ -1431,10 +1349,10 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
 
           {/* ---- 3열 그리드 ---- */}
           <div className="grid lg:grid-cols-[316px_minmax(0,1fr)_300px] gap-px bg-white/[.07]">
-            {/* ====== 좌측: 드라이브 모드 시퀀스 · 현재 제어 표시 · 방향 로커 ====== */}
+            {/* ====== 좌측: 드라이브 컨트롤 C1~C8 (각 줄에 자기 방향 버튼) ====== */}
             <div className="bg-[#0a0d0f] p-5 flex flex-col min-h-0">
               <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82] mb-4">
-                Drive Modes{' '}
+                Drive Controls{' '}
                 <b className="text-[#f0a53c] font-semibold">{modeCode(mode)}</b>
               </p>
               <div className="space-y-2">
@@ -1448,69 +1366,63 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                     0,
                     100,
                   );
+                  const dirs = DIR_ORDER.filter((d) => MODE_SPEC_LABELS[key][d] !== null);
                   return (
-                    <button
+                    <div
                       key={key}
-                      type="button"
-                      onClick={() => selectMode(key)}
-                      className={`w-full text-left px-3 py-2.5 rounded-[12px] border transition-all cursor-pointer ${
+                      className={`rounded-[12px] border transition-all ${
                         selected
                           ? 'border-[#f0a53c]/50 bg-[linear-gradient(90deg,rgba(240,165,60,.14),rgba(240,255,255,0))]'
                           : 'border-white/[.07] bg-white/[.035] hover:border-white/20'
                       }`}
                     >
-                      <div className="flex items-baseline gap-2.5">
-                        <span
-                          className={`font-hmi-cond text-[16px] font-bold tracking-[.1em] ${
-                            selected ? 'text-[#ffc276]' : 'text-[#c9d6d7]'
-                          }`}
-                        >
-                          {modeCode(key)}
-                        </span>
-                        <span className="flex-1 text-[12.5px] text-[#8d9c9e] truncate">
-                          {conf.name[currentLang]}
-                        </span>
-                        <span className="font-hmi-cond text-[17px] font-bold text-[#e9f1f2] whitespace-nowrap">
-                          {fmtAxis(axis, pos[axis])}
-                        </span>
+                      {/* 줄 헤더를 누르면 그 컨트롤이 현재 조작 대상으로 선택된다 */}
+                      <button
+                        type="button"
+                        onClick={() => selectMode(key)}
+                        className="w-full text-left px-3 pt-2 block cursor-pointer"
+                      >
+                        <div className="flex items-baseline gap-2.5">
+                          <span
+                            className={`font-hmi-cond text-[16px] font-bold tracking-[.1em] ${
+                              selected ? 'text-[#ffc276]' : 'text-[#c9d6d7]'
+                            }`}
+                          >
+                            {modeCode(key)}
+                          </span>
+                          <span className="flex-1 text-[12.5px] text-[#8d9c9e] truncate">
+                            {conf.name[currentLang]}
+                          </span>
+                          <span className="font-hmi-cond text-[17px] font-bold text-[#e9f1f2] whitespace-nowrap">
+                            {fmtAxis(axis, pos[axis])}
+                          </span>
+                        </div>
+                        <div className="h-[3px] rounded-full bg-white/[.07] mt-1.5 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
+                            style={{ width: `${ratio}%` }}
+                          />
+                        </div>
+                      </button>
+                      {/* 이 컨트롤이 가진 방향만 버튼이 된다 — 누르는 동안 연속 조작 */}
+                      <div
+                        className={`grid gap-1 px-2 pt-1.5 pb-2 ${
+                          dirs.length === 4 ? 'grid-cols-4' : 'grid-cols-2'
+                        }`}
+                      >
+                        {dirs.map((d) => controlButton(key, d))}
                       </div>
-                      <div className="h-[4px] rounded-full bg-white/[.07] mt-2 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
-                          style={{ width: `${ratio}%` }}
-                        />
-                      </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
-              {/* ---- 방향 로커 — 4키 고정 스킨. 모드가 바뀌어도 키 자리·크기·라벨은 그대로 ---- */}
-              <div className="mt-5 pt-5 border-t border-white/10">
-                <div className="flex items-baseline justify-between mb-2">
-                  <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82]">
-                    Direction Rocker
-                  </p>
-                  <span className="text-[9px] tracking-[.16em] uppercase text-[#4f5c5f]">
-                    {currentLang === 'ko' ? '누르는 동안 연속' : 'HOLD = RUN'}
-                  </span>
-                </div>
-
-                {/* 로커는 8개 드라이브 모드 전용 — 릴렉스는 우측 프리셋 레이어에서 조작한다 */}
-                <div className="rounded-[14px] border border-white/[.07] bg-[linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_10px_20px_-16px_rgba(0,0,0,.95)]">
-                  <div className="grid grid-cols-3 gap-1">
-                    {rockerCorner('c1')}
-                    {rockerKey('up')}
-                    {rockerCorner('c2')}
-                    {rockerKey('left')}
-                    {rockerHub()}
-                    {rockerKey('right')}
-                    {rockerCorner('c3')}
-                    {rockerKey('down')}
-                    {rockerCorner('c4')}
-                  </div>
-                </div>
-              </div>
+              {/* 홀드 = 연속 조작이라는 동작 규칙 (예전 로커 헤더가 하던 말) */}
+              <p className="mt-3 text-[9px] leading-relaxed tracking-[.14em] uppercase text-[#4f5c5f]">
+                {currentLang === 'ko'
+                  ? '버튼을 누르는 동안 연속 조작 · 방향키는 선택된 컨트롤'
+                  : 'HOLD A BUTTON TO RUN · ARROW KEYS DRIVE THE SELECTED CONTROL'}
+              </p>
             </div>
 
             {/* ================= 중앙: 포즈 스테이지 ================= */}
@@ -1538,7 +1450,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
 
               {/* ---- Now Controlling HUD — 시트 도해 좌상단의 빈 자리에 얹는 오버레이 ----
                     컬럼을 따로 소모하지 않으므로 화면 세로가 늘지 않는다.
-                    앰버 테두리 타일 = 로커가 지금 조작하는 축 (조작 축 코드도 병기) */}
+                    앰버 테두리 타일 = 지금 조작하는 축 (조작 축 코드도 병기) */}
               <div className="absolute top-10 left-4 w-[214px] rounded-[14px] border border-[#f0a53c]/25 bg-[#0a0d0f]/85 backdrop-blur-[2px] px-3 py-2.5 shadow-[0_18px_40px_-24px_rgba(0,0,0,1)]">
                 <p className="text-[9px] tracking-[.26em] uppercase text-[#6f7f82] mb-1">
                   Now Controlling
