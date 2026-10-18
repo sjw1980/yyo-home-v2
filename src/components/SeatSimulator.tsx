@@ -96,10 +96,10 @@ const ROCKER_STACK: Record<Direction, string> = {
   right: 'flex-row',
 };
 const ROCKER_TUCK: Record<Direction, string> = {
-  up: '-mt-[5px]',
-  down: '-mt-[5px]',
-  left: '-ml-[5px]',
-  right: '-ml-[5px]',
+  up: '-mt-[4px]',
+  down: '-mt-[4px]',
+  left: '-ml-[4px]',
+  right: '-ml-[4px]',
 };
 /** 눌렸을 때 로커가 그 방향으로 살짝 기운다 */
 const ROCKER_NUDGE: Record<Direction, string> = {
@@ -840,7 +840,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
         onPointerLeave={() => {
           if (active) handleRelease();
         }}
-        className={`relative h-[54px] overflow-hidden rounded-[13px] border transition-all duration-150 select-none touch-none
+        className={`relative h-[32px] overflow-hidden rounded-[10px] border transition-all duration-150 select-none touch-none
           ${
             active
               ? `scale-[.97] ${ROCKER_NUDGE[dir]} border-[#f0a53c]/70 text-[#ffe0b3] shadow-[0_0_18px_-4px_rgba(240,165,60,.75)]`
@@ -861,12 +861,12 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
             active ? 'opacity-100' : 'opacity-0'
           }`}
         />
-        <span className="relative h-full flex flex-col items-center justify-center gap-[3px]">
+        <span className="relative h-full flex flex-col items-center justify-center gap-[1px]">
           <span className={`flex ${ROCKER_STACK[dir]} items-center leading-none`}>
-            <Chev className="w-[14px] h-[14px]" strokeWidth={2.2} />
-            <Chev className={`w-[14px] h-[14px] opacity-40 ${ROCKER_TUCK[dir]}`} strokeWidth={2.2} />
+            <Chev className="w-[12px] h-[12px]" strokeWidth={2.4} />
+            <Chev className={`w-[12px] h-[12px] opacity-40 ${ROCKER_TUCK[dir]}`} strokeWidth={2.4} />
           </span>
-          <span className="text-[7.5px] leading-none uppercase tracking-[.18em]">
+          <span className="text-[6.5px] leading-none uppercase tracking-[.14em]">
             {ROCKER_CAPTION[dir][currentLang]}
           </span>
         </span>
@@ -878,19 +878,19 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const rockerHub = () => (
     <span className="flex items-center justify-center">
       <span
-        className={`w-[46px] h-[46px] rounded-full border flex flex-col items-center justify-center gap-[2px] transition-all duration-150 ${
+        className={`w-[34px] h-[34px] rounded-full border flex flex-col items-center justify-center gap-[1px] transition-all duration-150 ${
           pressed
             ? 'border-[#f0a53c]/45 bg-[radial-gradient(circle_at_50%_30%,rgba(240,165,60,.22),rgba(240,165,60,.04))] shadow-[0_0_14px_-4px_rgba(240,165,60,.85)]'
             : 'border-white/[.09] bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,.10),rgba(255,255,255,.02))]'
         }`}
       >
         <i
-          className={`w-[5px] h-[5px] rounded-full transition-all ${
+          className={`w-[4px] h-[4px] rounded-full transition-all ${
             pressed ? 'bg-[#f0a53c] shadow-[0_0_8px_#f0a53c]' : 'bg-[#4f5c5f]'
           }`}
         />
         <span
-          className={`text-[7px] leading-none tracking-[.2em] uppercase ${
+          className={`text-[6px] leading-none tracking-[.12em] uppercase ${
             pressed ? 'text-[#ffc276]' : 'text-[#4f5c5f]'
           }`}
         >
@@ -903,7 +903,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   /** 패드 모서리 나사 머리 — 4개의 키가 한 몸의 로커로 읽히도록 채워 두는 고정 자리 */
   const rockerCorner = (key: string) => (
     <span key={key} className="flex items-center justify-center">
-      <i className="w-[5px] h-[5px] rounded-full bg-white/[.07] shadow-[inset_0_1px_1px_rgba(0,0,0,.65)]" />
+      <i className="w-[4px] h-[4px] rounded-full bg-white/[.07] shadow-[inset_0_1px_1px_rgba(0,0,0,.65)]" />
     </span>
   );
 
@@ -1290,27 +1290,27 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
             ? `RELAX PARTIAL · ${relaxPct.toFixed(0)}% APPLIED · ON = RESUME 100% / OFF = RESTORE`
             : 'SYSTEM IDLE · SELECT A MODE AND HOLD A DIRECTION KEY'));
 
-  /** 릴렉스 프리셋 패널 상태 안내문 */
+  /** 릴렉스 프리셋 패널 상태 안내문 — 한 줄로 끝난다 (패널 높이 = 우측 컬럼 높이 예산) */
   const relaxHint =
     relax.run === 'on'
       ? currentLang === 'ko'
-        ? '릴렉션 포즈 적용 중 — 다른 모드를 고르거나 로커를 조작하면 중단되어 부분 적용이 됩니다.'
-        : 'Applying relax pose — picking another mode or using the rocker interrupts it into PARTIAL.'
+        ? '이동 중 — 조작 시 부분 적용'
+        : 'Moving — any input interrupts'
       : relax.run === 'off'
         ? currentLang === 'ko'
           ? '스냅샷 복귀 중…'
           : 'Restoring snapshot…'
         : relax.phase === 'on'
           ? currentLang === 'ko'
-            ? '릴렉션 포즈 유지 중. Off 를 누르면 스냅샷으로 6축이 동시에 복귀합니다.'
-            : 'Relax pose holding. Off restores the 6-axis snapshot together.'
+            ? 'OFF = 스냅샷 복귀'
+            : 'OFF restores the snapshot'
           : relax.phase === 'partial'
             ? currentLang === 'ko'
-              ? '시퀀스 중단 — ON 은 100% 까지 이어서 적용하고, OFF 는 스냅샷으로 복귀합니다.'
-              : 'Sequence interrupted — ON resumes to 100%, OFF restores the snapshot.'
+              ? 'ON = 이어서 · OFF = 복귀'
+              : 'ON resumes · OFF restores'
             : currentLang === 'ko'
-              ? 'ON 을 누르면 현재 6축이 스냅샷으로 저장되고 릴렉션 포즈로 이동합니다.'
-              : 'ON saves the current 6 axes as a snapshot, then drives the relax pose.';
+              ? 'ON = 지금 6축을 스냅샷 저장'
+              : 'ON snapshots the current 6 axes';
 
   /** 진행률 링 (270° 호) */
   const RING_R = 104;
@@ -1487,7 +1487,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
 
               {/* ---- 방향 로커 — 4키 고정 스킨. 모드가 바뀌어도 키 자리·크기·라벨은 그대로 ---- */}
               <div className="mt-5 pt-5 border-t border-white/10">
-                <div className="flex items-baseline justify-between mb-2.5">
+                <div className="flex items-baseline justify-between mb-2">
                   <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82]">
                     Direction Rocker
                   </p>
@@ -1497,8 +1497,8 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                 </div>
 
                 {/* 로커는 8개 드라이브 모드 전용 — 릴렉스는 우측 프리셋 레이어에서 조작한다 */}
-                <div className="rounded-[18px] border border-white/[.07] bg-[linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_14px_28px_-20px_rgba(0,0,0,.95)]">
-                  <div className="grid grid-cols-3 gap-1.5">
+                <div className="rounded-[14px] border border-white/[.07] bg-[linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.012))] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,.05),0_10px_20px_-16px_rgba(0,0,0,.95)]">
+                  <div className="grid grid-cols-3 gap-1">
                     {rockerCorner('c1')}
                     {rockerKey('up')}
                     {rockerCorner('c2')}
@@ -1687,7 +1687,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                 Preset Progress
               </p>
               <div className="flex justify-center">
-                <svg width="170" height="170" viewBox="0 0 252 252">
+                <svg width="156" height="156" viewBox="0 0 252 252">
                   <defs>
                     <linearGradient id="hmiArc" x1="0" y1="0" x2="1" y2="1">
                       <stop offset="0" stopColor="#f0a53c" />
@@ -1816,10 +1816,10 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                   {Array.from({ length: POSE_SLOT_COUNT }, (_, i) => slotCard(i))}
                 </div>
 
-                <p className="text-[11px] text-[#8d9c9e] leading-relaxed mt-2.5">
+                <p className="text-[10.5px] text-[#8d9c9e] leading-relaxed mt-2">
                   {currentLang === 'ko'
-                    ? '슬롯에 마우스를 올리면 저장된 포즈가 시트에 점선으로 미리 뜹니다. 탭하면 그 포즈로 모터가 움직이고, 0.6초 누르면 지금 포즈가 새겨집니다.'
-                    : 'Hover a slot to ghost its pose onto the seat, tap to drive there, hold 0.6s to etch the current pose.'}
+                    ? '호버 = 시트에 점선 미리보기'
+                    : 'Hover to ghost the pose'}
                 </p>
               </div>
 
@@ -1889,7 +1889,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                   {relaxButton(true)}
                   {relaxButton(false)}
                 </div>
-                <p className="text-[11.5px] text-[#8d9c9e] leading-relaxed mt-3">{relaxHint}</p>
+                <p className="text-[10.5px] text-[#8d9c9e] leading-relaxed mt-2.5">{relaxHint}</p>
               </div>
 
               <p className="text-[11px] tracking-[.32em] uppercase text-[#6f7f82] mt-4 pt-4 border-t border-white/10 mb-2">
