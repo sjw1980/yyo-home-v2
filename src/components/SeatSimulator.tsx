@@ -28,6 +28,7 @@ import {
   capturePose,
   clamp,
   lrSign,
+  modeAxes,
   modeCode,
   normalizePose,
   poseDrift,
@@ -68,7 +69,13 @@ const DIR_CHEVRON: Record<Direction, typeof ChevronUp> = {
   left: ChevronLeft,
   right: ChevronRight,
 };
-const DIR_ORDER: Direction[] = ['up', 'down', 'left', 'right'];
+/**
+ * 방향 버튼 배치 순서 — **위쪽의 축별 위치 바와 같은 자리에 놓는다.**
+ *  좌우 축(lrAxis) 을 조작하는 버튼을 좌측, 상하 축(udAxis) 을 조작하는 버튼을 우측.
+ *  럼버(4방향) 는 바가 `LMB | LMH` 순서이므로 버튼도 `◀ ▶ | ▲ ▼` 가 그 아래에 나란히 선다.
+ *  (2버튼 컨트롤은 상대 순서가 그대로라 표시가 변하지 않는다: 상하 전용 = ▲▼, 좌우 전용 = ◀▶)
+ */
+const DIR_ORDER: Direction[] = ['left', 'right', 'up', 'down'];
 
 /** '럼버 전진' → '전진' (버튼에는 목적어만, 전체 문구는 title 에 남긴다) */
 const shortDirLabel = (text: string) => {
@@ -756,11 +763,18 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const tgt = tgtRef.current;
   const focusAxis: AxisKey = activeAxis ?? primaryAxis(mode);
   const focusConf = AXIS_CONFIG[focusAxis];
-  const span = focusConf.max - focusConf.min;
-  const pct = ((pos[focusAxis] - focusConf.min) / span) * 100;
-  const tgtPct = ((tgt[focusAxis] - focusConf.min) / span) * 100;
-  const softLeft = ((focusConf.softMin - focusConf.min) / span) * 100;
-  const softRight = ((focusConf.softMax - focusConf.min) / span) * 100;
+  /** 축 → 트래블 바 좌표 (%) — 포커스 축(큰 바)과 둘째 축(보조 바)이 같은 공식을 공유한다 */
+  const travelOf = (axis: AxisKey) => {
+    const conf = AXIS_CONFIG[axis];
+    const axisSpan = conf.max - conf.min;
+    return {
+      pct: ((pos[axis] - conf.min) / axisSpan) * 100,
+      tgtPct: ((tgt[axis] - conf.min) / axisSpan) * 100,
+      softLeft: ((conf.softMin - conf.min) / axisSpan) * 100,
+      softRight: ((conf.softMax - conf.min) / axisSpan) * 100,
+    };
+  };
+  const { pct, tgtPct, softLeft, softRight } = travelOf(focusAxis);
 
   const fmtAxis = (axis: AxisKey, value: number) =>
     `${value.toFixed(AXIS_CONFIG[axis].unit === '°' ? 1 : 0)}${AXIS_CONFIG[axis].unit}`;
@@ -1170,9 +1184,13 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   });
 
   /** 현재 컨트롤이 조작하는 축 (좌우 + 상하) — 텔레메트리 타일 강조·표기용 */
-  const drivenAxes = [MODE_CONFIG[mode].lrAxis, MODE_CONFIG[mode].udAxis].filter(
-    (k): k is AxisKey => k !== null,
-  );
+  const drivenAxes = modeAxes(mode);
+  /**
+   * 4방향 컨트롤(럼버)의 둘째 축 = 포커스 축이 아닌 쪽.
+   * 조작 축이 아니어도 위치는 계속 보여야 하므로 중앙에 보조 트래블 바를 따로 둔다.
+   */
+  const secondaryAxis: AxisKey | null = drivenAxes.find((k) => k !== focusAxis) ?? null;
+  const secondary = secondaryAxis ? { axis: secondaryAxis, ...travelOf(secondaryAxis) } : null;
 
   const etaMax = Math.max(0, ...CHOREO_AXES.map((k) => etaOf(k)));
   /** 배너 톤 — 이동 중(앰버) / 미리보기·릴렉스 유지(민트) / 부분 적용(딤앰버) / 유휴(그레이) */
@@ -1359,13 +1377,12 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                 {MODE_ORDER.map((key) => {
                   const conf = MODE_CONFIG[key];
                   const selected = mode === key;
-                  const axis = primaryAxis(key);
-                  const confAxis = AXIS_CONFIG[axis];
-                  const ratio = clamp(
-                    ((pos[axis] - confAxis.min) / (confAxis.max - confAxis.min)) * 100,
-                    0,
-                    100,
-                  );
+                  /**
+                   * 이 컨트롤이 조작하는 축 — 럼버만 두 개(전후 LMB · 상하 LMH) 다.
+                   * 4방향 컨트롤은 위치 바도 축마다 나눠서 관리한다.
+                   */
+                  const axes = modeAxes(key);
+                  const dual = axes.length > 1;
                   const dirs = DIR_ORDER.filter((d) => MODE_SPEC_LABELS[key][d] !== null);
                   return (
                     <div
@@ -1393,15 +1410,58 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                           <span className="flex-1 text-[12.5px] text-[#8d9c9e] truncate">
                             {conf.name[currentLang]}
                           </span>
-                          <span className="font-hmi-cond text-[17px] font-bold text-[#e9f1f2] whitespace-nowrap">
-                            {fmtAxis(axis, pos[axis])}
-                          </span>
+                          {/* 1축 컨트롤만 값을 헤더에 싣는다 — 2축은 아래 축별 바에 각각 붙인다 */}
+                          {!dual && (
+                            <span className="font-hmi-cond text-[17px] font-bold text-[#e9f1f2] whitespace-nowrap">
+                              {fmtAxis(axes[0], pos[axes[0]])}
+                            </span>
+                          )}
                         </div>
-                        <div className="h-[3px] rounded-full bg-white/[.07] mt-1.5 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
-                            style={{ width: `${ratio}%` }}
-                          />
+                        {/*
+                          축별 위치 바 — 럼버(4방향)는 전후(LMB)와 상하(LMH) 를 한 바에 섞지 않는다.
+                          각 축이 자기 라벨·자기 수치·자기 바를 갖고, 지금 조작 중인 축만 앰버로 선다.
+                        */}
+                        <div className="flex gap-2 mt-1.5">
+                          {axes.map((k) => {
+                            const axisConf = AXIS_CONFIG[k];
+                            const ratio = clamp(
+                              ((pos[k] - axisConf.min) / (axisConf.max - axisConf.min)) * 100,
+                              0,
+                              100,
+                            );
+                            const driven = selected && focusAxis === k;
+                            return (
+                              <div key={k} className="flex-1 min-w-0">
+                                {dual && (
+                                  <div className="flex items-baseline justify-between gap-1 leading-none mb-1">
+                                    <span
+                                      className={`text-[8.5px] tracking-[.18em] uppercase ${
+                                        driven ? 'text-[#c9a273]' : 'text-[#5d6c6f]'
+                                      }`}
+                                    >
+                                      {axisConf.code}
+                                    </span>
+                                    <span
+                                      className={`font-hmi-cond text-[12px] font-bold leading-none whitespace-nowrap ${
+                                        driven ? 'text-[#ffd9a3]' : 'text-[#93a2a4]'
+                                      }`}
+                                    >
+                                      {pos[k].toFixed(axisConf.unit === '°' ? 1 : 0)}
+                                      <small className="text-[8px] text-[#6f7f82] ml-[1px]">
+                                        {axisConf.unit}
+                                      </small>
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="h-[3px] rounded-full bg-white/[.07] overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full bg-[linear-gradient(90deg,#f0a53c,#ffd9a3)]"
+                                    style={{ width: `${ratio}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </button>
                       {/* 이 컨트롤이 가진 방향만 버튼이 된다 — 누르는 동안 연속 조작 */}
@@ -1554,6 +1614,39 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
                     />
                   )}
                 </div>
+                {/*
+                  둘째 축 보조 바 — 4방향 컨트롤(럼버) 은 조작 축이 아닌 쪽의 위치도 계속 보여준다.
+                  전후(LMB) 를 조작하는 동안 상하(LMH) 가 어디 있는지 잃지 않는 것이 목적이다.
+                */}
+                {secondary && (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-[8.5px] tracking-[.18em] uppercase text-[#5d6c6f] whitespace-nowrap">
+                      {AXIS_CONFIG[secondary.axis].code}
+                    </span>
+                    <div className="relative flex-1 h-[5px] rounded-full bg-white/[.05] overflow-hidden">
+                      <i
+                        className="absolute inset-y-0 block bg-white/[.06]"
+                        style={{
+                          left: `${secondary.softLeft}%`,
+                          width: `${Math.max(secondary.softRight - secondary.softLeft, 0)}%`,
+                        }}
+                      />
+                      <i
+                        className="absolute inset-y-0 left-0 block rounded-full bg-[linear-gradient(90deg,rgba(240,165,60,.55),rgba(255,217,163,.55))]"
+                        style={{ width: `${clamp(secondary.pct, 0, 100)}%` }}
+                      />
+                      {relaxAxesRef.current.has(secondary.axis) && (
+                        <i
+                          className="absolute inset-y-0 w-[2px] bg-[#5fd6a4] shadow-[0_0_8px_#5fd6a4]"
+                          style={{ left: markerLeft(secondary.tgtPct) }}
+                        />
+                      )}
+                    </div>
+                    <span className="font-hmi-cond text-[11.5px] font-bold text-[#93a2a4] whitespace-nowrap">
+                      {fmtAxis(secondary.axis, pos[secondary.axis])}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* 축별 코리오그래피 */}

@@ -554,6 +554,18 @@ export function primaryAxis(modeKey: ModeKey): AxisKey {
   return conf.lrAxis ?? conf.udAxis ?? 'tilt';
 }
 
+/**
+ * 모드가 조작하는 축 전체 (좌우 + 상하)
+ *  — 럼버(C4) 처럼 4방향 버튼 하나로 두 축(전후 LMB · 상하 LMH)을 조작하는 컨트롤은
+ *    **위치 표시도 축마다 나눠야** 한다. 대표 축(primaryAxis) 하나로 두 축을 대표시키면
+ *    상하를 조작하는 동안 바가 전혀 움직이지 않는다. 표시는 modeAxes, AUTO DEMO 표기는 primaryAxis.
+ */
+export function modeAxes(modeKey: ModeKey): AxisKey[] {
+  const conf = MODE_CONFIG[modeKey];
+  const axes = [conf.lrAxis, conf.udAxis].filter((k): k is AxisKey => k !== null);
+  return axes.filter((k, i) => axes.indexOf(k) === i);
+}
+
 /** 좌(L) 조작에 수치가 증가하는 축 — 볼스터 조임 / 쿠션 신장 / 럼버 돌출 (도해의 FWD = 좌) */
 const LEFT_INCREASE_AXES: AxisKey[] = ['bolster', 'cushion', 'lumber'];
 
