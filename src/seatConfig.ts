@@ -579,3 +579,77 @@ export function rotateMode(modeKey: ModeKey, step: number): ModeKey {
   return MODE_ORDER[next];
 }
 
+/* ============================================================================
+ * 포즈 슬롯 (시트 메모리 프리셋)
+ *
+ * 릴렉스가 "정해진 릴렉션 포즈" 라는 고정 프리셋이라면, 포즈 슬롯은 **사용자가 지금
+ * 이 자리에 앉아 만든 포즈** 를 그대로 담는 빈 그릇이다. 그래서 릴렉스 레이어와도
+ * 독립적으로 동작한다 (슬롯을 부르면 릴렉스는 부분 적용으로 강등된다).
+ * ==========================================================================*/
+
+/** 슬롯에 담는 축 — RLX(relaxation_return) 는 파생 신호라 저장·구동 대상이 아니다 */
+export const POSE_AXES: AxisKey[] = AXIS_ORDER.filter((k) => k !== 'relaxation_return');
+
+/** 슬롯 수 (실차 메모리 2계열 대응 — 2개가 손에 가장 잘 붙는다) */
+export const POSE_SLOT_COUNT = 2;
+
+/** 브라우저 로컬 저장 키 — 데모이므로 계정 없이 이 기기에만 남는다 */
+export const POSE_STORAGE_KEY = 'yyo.seat.pose-slots.v1';
+
+/** 슬롯 하나에 기록된 포즈 (10축 중 구동 축 9개) */
+export type SavedPose = Partial<Record<AxisKey, number>>;
+
+/** 현재 포즈를 슬롯 기록용으로 복사 */
+export function capturePose(positions: Record<AxisKey, number>): SavedPose {
+  const pose: SavedPose = {};
+  POSE_AXES.forEach((k) => {
+    pose[k] = positions[k];
+  });
+  return pose;
+}
+
+/**
+ * 저장해 둔 포즈를 현재 축 스펙에 맞춘다 (손상·구버전 데이터 방어)
+ *  - 숫자가 아니거나 범위를 벗어난 값은 하드 리밋으로 클램프
+ *  - 빠진 축은 초기값으로 채운다
+ */
+export function normalizePose(pose: SavedPose | null | undefined): SavedPose | null {
+  if (!pose || typeof pose !== 'object') return null;
+
+  const next: SavedPose = {};
+  let known = 0;
+  POSE_AXES.forEach((k) => {
+    const raw = pose[k];
+    if (typeof raw !== 'number' || !Number.isFinite(raw)) return;
+    const conf = AXIS_CONFIG[k];
+    next[k] = clamp(raw, conf.min, conf.max);
+    known += 1;
+  });
+
+  return known > 0 ? next : null;
+}
+
+/** 슬롯 포즈까지의 잔여 이동 시간 (s) — 전 축이 도착하는 시점 = 가장 오래 걸리는 축 */
+export function poseEta(pose: SavedPose, positions: Record<AxisKey, number>): number {
+  let eta = 0;
+  POSE_AXES.forEach((k) => {
+    const target = pose[k];
+    if (target === undefined) return;
+    const diff = Math.abs(target - positions[k]);
+    if (diff <= 0.05) return;
+    eta = Math.max(eta, diff / AXIS_CONFIG[k].speed);
+  });
+  return eta;
+}
+
+/** 아직 목표에 도달하지 못한 축의 개수 (0 = 현재 포즈가 슬롯과 일치) */
+export function poseDrift(pose: SavedPose, positions: Record<AxisKey, number>): number {
+  let drift = 0;
+  POSE_AXES.forEach((k) => {
+    const target = pose[k];
+    if (target !== undefined && Math.abs(target - positions[k]) > 0.05) drift += 1;
+  });
+  return drift;
+}
+
+
