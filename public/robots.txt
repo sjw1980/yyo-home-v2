@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yyo.co.kr/sitemap.xml
