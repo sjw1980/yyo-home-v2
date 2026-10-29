@@ -46,7 +46,7 @@ export default function Header({
                 YYO
               </span>
               <span className="font-sans text-[10px] tracking-wider text-[#9bb09e] font-light mt-[-2px]">
-                {currentLang === 'ko' ? '주식회사 윤율온' : 'Yunyulon'}
+                {currentLang === 'ko' ? '윤율온' : 'YYO'}
               </span>
             </div>
           </div>

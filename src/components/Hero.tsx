@@ -116,7 +116,7 @@ export default function Hero({
             <span className="w-1.5 h-1.5 rounded-full bg-[#7dbaaf] animate-ping" />
             <span className="text-[#a4bca8]">SYS: ACTIVE_OK</span>
           </div>
-          <p>ISO 26262 / ASIL-D Compliant Process</p>
+          <p>ISO 26262 / ASIL-D 대응 프로세스</p>
           <p>DoIP Standard: ISO 13400</p>
           <p>AUTOSAR Core: Classic & Adaptive Stack</p>
         </div>

@@ -50,8 +50,8 @@ export default function BrandStory({ currentLang }: BrandStoryProps) {
           >
             <p className="text-lg text-white font-medium pl-4 border-l-2 border-[#7dbaaf]">
               {currentLang === 'ko' 
-                ? "“오직 자동차 전장이지만, 자동차 전장과 관련된 모든 것을 깊이 있게 해결합니다.”" 
-                : "“Only Automotive, but we cover the absolute depths of everything within Automotive.”"
+                ? "“AI를 활용한 다양한 미션을 모빌리티에 집중합니다.”" 
+                : "“We focus our AI-powered missions on mobility.”"
               }
             </p>
             <p className="text-stone-400">
@@ -61,9 +61,7 @@ export default function BrandStory({ currentLang }: BrandStoryProps) {
             <div className="pt-6 border-t border-stone-800 flex items-center space-x-4">
               <YOLogo variant="original" size={48} className="rounded-xl" />
               <div className="text-xs tracking-widest text-[#9bb09e]">
-                <span className="font-semibold text-white">주식회사 윤율온</span>
-                <span className="text-stone-600 mx-2">|</span>
-                <span className="text-stone-400">CEO LEE JI HYE (이지혜)</span>
+                <span className="font-semibold text-white">윤율온</span>
               </div>
             </div>
           </motion.div>

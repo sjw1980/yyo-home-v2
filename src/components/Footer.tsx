@@ -73,11 +73,11 @@ export default function Footer({ currentLang, onNavigate }: FooterProps) {
             <ul className="space-y-2.5 text-stone-500 font-light leading-relaxed">
               <li className="flex items-center space-x-2">
                 <Award className="w-3.5 h-3.5 text-[#56807d]" />
-                <span>ISO 26262 ASIL-D Safety Confirmed</span>
+                <span>ISO 26262 ASIL-D 대응 역량</span>
               </li>
               <li className="flex items-center space-x-2">
                 <ShieldAlert className="w-3.5 h-3.5 text-[#56807d]" />
-                <span>UN ECE R155/R156 Cybersecurity</span>
+                <span>UN ECE R155/R156 대응 컨설팅</span>
               </li>
               <li className="flex items-center space-x-2">
                 <FileText className="w-3.5 h-3.5 text-[#56807d]" />

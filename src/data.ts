@@ -222,11 +222,11 @@ export const translations: TranslationDictionary = {
     en: "Look us, What we are"
   },
   "About Company Name": {
-    ko: "주식회사 윤율온 (YYO Co., Ltd.)",
-    en: "Yunyulon Co., Ltd. (YYO)"
+    ko: "윤율온 (YYO)",
+    en: "Yunyulon (YYO)"
   },
   "Yunyulon History Body": {
-    ko: "주식회사 윤율온(YYO)은 급변하는 글로벌 모빌리티 질서 속에서 소프트웨어 정의 자동차(SDV)의 두뇌가 되는 임베디드 인텔리전스를 개발하는 기술 전문 기업입니다. 우리는 CAN/DoIP 통신 기반 고성능 펌웨어 플래시 부트로더 하드웨어 인프라부터 UDS 진단 규격 준수, AUTOSAR 소프트웨어 레이어, 견고한 ISO 26262 안전 프로세스 수립까지 글로벌 규격에 부합하는 최고의 모빌리티 컨설팅 및 엔지니어링을 제공합니다.",
+    ko: "윤율온(YYO)은 급변하는 글로벌 모빌리티 질서 속에서 소프트웨어 정의 자동차(SDV)의 두뇌가 되는 임베디드 인텔리전스를 개발하는 기술 전문 기업입니다. 우리는 CAN/DoIP 통신 기반 고성능 펌웨어 플래시 부트로더 하드웨어 인프라부터 UDS 진단 규격 준수, AUTOSAR 소프트웨어 레이어, 견고한 ISO 26262 안전 프로세스 수립까지 글로벌 규격에 부합하는 최고의 모빌리티 컨설팅 및 엔지니어링을 제공합니다.",
     en: "Yunyulon (YYO) is a dynamic technology company at the intersection of embedded software engineering and automotive digital innovation. Our mission is to revolutionize the global automotive landscape with highly secure Software-Defined Vehicle (SDV) middleware, AUTOSAR standard platform layers, secure diagnostic services, and reliable failure-prevention protocols complying with safety guidelines."
   },
 
@@ -304,7 +304,7 @@ export const translations: TranslationDictionary = {
     en: "Interactive Embedded Software ECU Diagnostic Terminal"
   },
   "Interactive Simulator Subtitle": {
-    ko: "주식회사 윤율온의 하이엔드 UDS 진단 프로토콜 및 복잡 디바이스 부트 기능을 직접 가상 시뮬레이션해 보세요.",
+    ko: "윤율온의 하이엔드 UDS 진단 프로토콜 및 복잡 디바이스 부트 기능을 직접 가상 시뮬레이션해 보세요.",
     en: "Experience our production-grade UDS diagnostic services and binary flash transfer logs in real-time."
   },
   "Simulator Select ECU": {
