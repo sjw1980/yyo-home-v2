@@ -328,6 +328,44 @@ export const translations: TranslationDictionary = {
     en: "Real-Time Controller Area Network (CAN) Bus Monitored Frame Logs"
   },
 
+  // DPSS Power Seat Simulator
+  "Seat Simulator": {
+    ko: "시트 시뮬레이터",
+    en: "Seat Simulator"
+  },
+  "Seat Simulator Title": {
+    ko: "DPSS 전동 시트 제어 시뮬레이터",
+    en: "DPSS Power Seat Control Simulator"
+  },
+  "Seat Simulator Subtitle": {
+    ko: "운전석 시트 조작기(DPSS)의 8개 컨트롤(C1~C8)과 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 각 컨트롤 줄에 그 컨트롤이 가진 방향 버튼이 있습니다 — 누른 채 유지하면 시트 형상이 실시간으로 갱신되고, 릴렉스는 모드가 아닌 독립 프리셋 레이어로 어떤 컨트롤에서든 6축에 겹쳐 동작합니다.",
+    en: "Drive all 8 controls (C1~C8) and 10 seat axes through a virtual motor physics model — every control row carries its own direction buttons, so press and hold one to reshape the seat in real time. Relax is not a control but a standalone preset layer that overlays 6 axes from any control."
+  },
+  "Seat Mode Panel": {
+    ko: "조작 모드 선택 (MODE SELECT)",
+    en: "CONTROL MODE SELECT"
+  },
+  "Seat Diagram Panel": {
+    ko: "가상 시트 물리 모델 (SEAT PHYSICS)",
+    en: "VIRTUAL SEAT PHYSICS MODEL"
+  },
+  "Seat Axis Monitor": {
+    ko: "전 축 실시간 모니터 (AXIS MONITOR)",
+    en: "LIVE AXIS MONITOR"
+  },
+  "Seat Control Hint": {
+    ko: "패널을 클릭한 뒤 방향키 · Q·E(모드 전환) · R(릴렉스 On/Off) · 1·2(슬롯 호출) · Shift+1·2(슬롯 저장) · Space(AUTO DEMO) 로도 조작됩니다. 슬롯은 탭 = 호출 · 0.6초 누름 = 저장 · 호버 = 미리보기, 릴렉스 On 은 지금 6축을 스냅샷으로 저장합니다.",
+    en: "Focus the panel and use Arrow keys · Q·E (mode) · R (relax) · 1·2 (recall slot) · Shift+1·2 (save slot) · Space (AUTO DEMO). Slots: tap = recall, hold 0.6s = save, hover = preview. Relax On snapshots the current 6 axes."
+  },
+  "Seat Reset Pose": {
+    ko: "전 축 초기 위치로 리셋",
+    en: "Reset All Axes to Center"
+  },
+  "Seat Disclaimer": {
+    ko: "물리 상수(가동범위·모터 속도·소프트 리밋)가 구현되어 있으며, 실제 차량의 ECU·센서·안전 로직은 포함하지 않는 웹 데모입니다.",
+    en: "Physics constants (travel range, motor speed, soft limits) are implemented. This web demo contains no vehicle ECU, sensors or safety logic."
+  },
+
   // Footer / Corporate Info
   "Company Register Title": {
     ko: "주식회사 윤율온 (Yunyulon Co., Ltd.)",

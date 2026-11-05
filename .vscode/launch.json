@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // 먼저 `npm run dev`로 서버를 띄운 뒤 F5 (가장 빠르고 안정적)
+      "name": "Chrome 디버그 (서버 이미 실행 중)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "timeout": 30000,
+      "skipFiles": [
+        "<node_internals>/**",
+        "${webRoot}/node_modules/**"
+      ]
+    },
+    {
+      // dev 서버가 꺼져 있으면 자동으로 띄우고 디버깅 시작
+      "name": "Chrome 디버그 (dev 서버 자동 기동)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "timeout": 30000,
+      "preLaunchTask": "vite: dev (background)",
+      "postDebugTask": "vite: dev (stop)",
+      "skipFiles": [
+        "<node_internals>/**",
+        "${webRoot}/node_modules/**"
+      ]
+    },
+    {
+      // 이미 열려 있는 Chrome(9222 포트 원격 디버깅)에 붙이기
+      "name": "Chrome에 attach (기존 브라우저, --remote-debugging-port=9222)",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true,
+      "skipFiles": [
+        "<node_internals>/**",
+        "${webRoot}/node_modules/**"
+      ]
+    }
+  ]
+}

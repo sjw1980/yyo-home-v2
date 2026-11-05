@@ -1,0 +1,10 @@
+{
+  // VS Code is launched before Node was installed, so its cached environment
+  // has no node/npm. Prepend the Node install dir to PATH for integrated terminals.
+  // Applies to newly created terminals - no VS Code restart required.
+  "terminal.integrated.env.windows": {
+    "PATH": "${env:USERPROFILE}\\nodejs\\node-v24.21.0-win-x64;${env:PATH}"
+  },
+  // Use the workspace TypeScript (5.8) instead of the VS Code bundled one.
+  "typescript.tsdk": "node_modules/typescript/lib"
+}
