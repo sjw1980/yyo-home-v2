@@ -40,19 +40,19 @@ interface WiperGeom {
 
 const STYLES: Record<StyleKey, WiperGeom[]> = {
   pantograph: [
-    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
-    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
+    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 232 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false, crankMin: 0, crankMax: 162 },
+    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 232 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: false, crankMin: 0, crankMax: 162 },
   ],
   tandem: [
-    { crank: { x: 112, y: 246 }, rCrank: 26, pivotAnchor: { x: 152, y: 224 }, rPivot: 34, bladeLen: 122, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
-    { crank: { x: 158, y: 254 }, rCrank: 22, pivotAnchor: { x: 202, y: 236 }, rPivot: 30, bladeLen: 92, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
+    { crank: { x: 112, y: 246 }, rCrank: 26, pivotAnchor: { x: 152, y: 232 }, rPivot: 34, bladeLen: 122, bladeOffDeg: 14, mirror: false, crankMin: 0, crankMax: 162 },
+    { crank: { x: 158, y: 254 }, rCrank: 22, pivotAnchor: { x: 202, y: 240 }, rPivot: 30, bladeLen: 92, bladeOffDeg: 14, mirror: false, crankMin: 0, crankMax: 162 },
   ],
   opposite: [
-    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
-    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true, crankMin: 18, crankMax: 162 },
+    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 232 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false, crankMin: 0, crankMax: 162 },
+    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 232 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true, crankMin: 0, crankMax: 162 },
   ],
   single: [
-    { crank: { x: 100, y: 248 }, rCrank: 28, pivotAnchor: { x: 150, y: 226 }, rPivot: 36, bladeLen: 130, bladeOffDeg: 8, mirror: false, crankMin: 25, crankMax: 115 },
+    { crank: { x: 100, y: 248 }, rCrank: 28, pivotAnchor: { x: 150, y: 232 }, rPivot: 36, bladeLen: 130, bladeOffDeg: 8, mirror: false, crankMin: 0, crankMax: 115 },
   ],
 };
 
@@ -667,7 +667,8 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
                 );
               })}
 
-              {/* wiper arms + blades (slightly flexed while sweeping) */}
+              {/* wiper arms + blades (clipped to glass: parked blades hide below the cowl line) */}
+              <g clipPath="url(#glassClip)">
               {linkages.map((lk, i) => {
                 const bow = sweeping ? 0.06 : 0.02;
                 const cx = (lk.pivot.x + lk.tip.x) / 2 - (lk.tip.y - lk.pivot.y) * bow;
@@ -690,11 +691,12 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
                       />
                     )}
                     <circle cx={lk.tip.x} cy={lk.tip.y} r="2.5" fill="#c4e0cc" />
-                  </g>
-                );
-              })}
+                    </g>
+                    );
+                    })}
+                    </g>
 
-              {/* washer spray */}
+                    {/* washer spray */}
               {sim.washer > 0 && (
                 <g opacity="0.85" clipPath="url(#glassClip)">
                   {[0, 1, 2, 3, 4, 5].map((i) => (
