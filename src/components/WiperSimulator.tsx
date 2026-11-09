@@ -656,8 +656,8 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
                     <line x1={g.crank.x} y1={g.crank.y} x2={lk.pin.x} y2={lk.pin.y} stroke="#8fbf9f" strokeWidth="5" strokeLinecap="round" />
                     {/* coupler link: pin -> pivot (amber, high contrast) */}
                     <line x1={lk.pin.x} y1={lk.pin.y} x2={lk.pivot.x} y2={lk.pivot.y} stroke="#d9b36a" strokeWidth="4" strokeLinecap="round" />
-                    {/* rocker arm: fixed anchor -> pivot */}
-                    <line x1={g.pivotAnchor.x} y1={g.pivotAnchor.y} x2={lk.pivot.x} y2={lk.pivot.y} stroke="#c4e0cc" strokeWidth="3.5" strokeLinecap="round" />
+                    {/* rocker arm: fixed anchor -> pivot (steel gray, distinct from white blade) */}
+                    <line x1={g.pivotAnchor.x} y1={g.pivotAnchor.y} x2={lk.pivot.x} y2={lk.pivot.y} stroke="#7d938a" strokeWidth="3.5" strokeLinecap="round" />
                     {/* joints */}
                     <circle cx={g.crank.x} cy={g.crank.y} r="4.5" fill="#8fbf9f" stroke="#1c2321" strokeWidth="1.5" />
                     <circle cx={lk.pin.x} cy={lk.pin.y} r="4" fill="#d9b36a" stroke="#1c2321" strokeWidth="1.5" />
