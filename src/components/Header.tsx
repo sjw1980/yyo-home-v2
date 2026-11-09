@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, Globe, Cpu, ShieldAlert, Navigation, Mail, Activity, Armchair, BrainCircuit } from 'lucide-react';
+import { Menu, X, Globe, Cpu, ShieldAlert, Navigation, Mail, Activity, Armchair, CloudRain } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { translations } from '../data';
 import YOLogo from './YOLogo';
