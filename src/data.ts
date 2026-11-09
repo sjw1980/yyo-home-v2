@@ -437,6 +437,11 @@ export const translations: TranslationDictionary = {
   "Ev rear": { ko: "R 기어 — 후방 와이퍼 + washer", en: "Reverse gear — rear wiper + washer" },
   "Ev defrost": { ko: "디프로스터 연동 간헐 와이핑", en: "Defroster-linked intermittent wiping" },
   "Ev resume": { ko: "해빙 완료 — 자동 복귀", en: "Thawed — auto resume" },
+  "Wiper Style Label": { ko: "링크 방식", en: "Linkage" },
+  "Style pantograph": { ko: "파라렐(4절)", en: "Parallel (4-bar)" },
+  "Style tandem": { ko: "탠덤", en: "Tandem" },
+  "Style opposite": { ko: "반대방향", en: "Opposite" },
+  "Style single": { ko: "싱글암", en: "Single arm" },
   "Wiper Disclaimer": {
     ko: "온사이트 물리 데모: 광학 레인센서(TIR) 모델 + BCM 규칙 엔진이 브라우저에서 동작합니다. 실제 ECU 검증은 HIL 환경에서 제공합니다.",
     en: "On-site physics demo: optical rain-sensor (TIR) model + BCM rule engine run in your browser. Real ECU verification is available in our HIL environment."
