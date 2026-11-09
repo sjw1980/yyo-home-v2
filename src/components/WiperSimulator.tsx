@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import {
   CloudRain, Gauge, Thermometer, Droplets, Sun, Moon, SlidersHorizontal,
@@ -15,6 +15,7 @@ type Pattern = 'constant' | 'gusting' | 'intermittent';
 type Contam = 'clean' | 'dusty' | 'oily';
 type Lever = 'OFF' | 'INT' | 'LO' | 'HI';
 type WState = 'IDLE' | 'AWAY' | 'HOME' | 'HOLD';
+type StyleKey = 'pantograph' | 'tandem' | 'opposite' | 'single';
 
 const RAIN_TARGET: Record<RainLevel, number> = {
   none: 0, mist: 0.15, light: 0.35, moderate: 0.55, heavy: 0.75, torrential: 0.95,
@@ -22,6 +23,80 @@ const RAIN_TARGET: Record<RainLevel, number> = {
 const CONTAM_OFFSET: Record<Contam, number> = { clean: 0, dusty: 0.15, oily: 0.28 };
 const START_TH = 0.35;
 const STOP_TH = 0.25;
+
+/* ---------------- linkage geometry ---------------- */
+
+interface WiperGeom {
+  crank: { x: number; y: number };
+  rCrank: number;
+  pivotAnchor: { x: number; y: number };
+  rPivot: number;
+  bladeLen: number;
+  bladeOffDeg: number;
+  mirror: boolean;
+}
+
+const STYLES: Record<StyleKey, WiperGeom[]> = {
+  pantograph: [
+    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false },
+    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true },
+  ],
+  tandem: [
+    { crank: { x: 118, y: 246 }, rCrank: 26, pivotAnchor: { x: 158, y: 224 }, rPivot: 34, bladeLen: 122, bladeOffDeg: 14, mirror: false },
+    { crank: { x: 142, y: 252 }, rCrank: 22, pivotAnchor: { x: 182, y: 232 }, rPivot: 30, bladeLen: 92, bladeOffDeg: 14, mirror: false },
+  ],
+  opposite: [
+    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false },
+    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true },
+  ],
+  single: [
+    { crank: { x: 128, y: 246 }, rCrank: 28, pivotAnchor: { x: 168, y: 224 }, rPivot: 36, bladeLen: 148, bladeOffDeg: 12, mirror: false },
+  ],
+};
+
+const CRANK_MIN = 18;
+const CRANK_MAX = 162;
+
+interface Linkage {
+  pin: { x: number; y: number };
+  pivot: { x: number; y: number };
+  tip: { x: number; y: number };
+  mid: { x: number; y: number };
+}
+
+function solveLinkage(g: WiperGeom, crankDeg: number): Linkage {
+  const th = (g.mirror ? 180 - crankDeg : crankDeg) * (Math.PI / 180);
+  const pin = { x: g.crank.x + g.rCrank * Math.cos(th), y: g.crank.y - g.rCrank * Math.sin(th) };
+  const A = g.pivotAnchor;
+  const r1 = Math.hypot(pin.x - A.x, pin.y - A.y);
+  const r2 = g.rPivot;
+  let pivot = { x: A.x, y: A.y - r2 };
+  if (r1 > 1e-6 && r1 <= r2 * 2) {
+    const a = r1 / 2; // equal-arm pantograph: intersection on perpendicular bisector
+    const mx = (pin.x + A.x) / 2;
+    const my = (pin.y + A.y) / 2;
+    const h = Math.sqrt(Math.max(0, r2 * r2 - a * a));
+    const ux = (A.x - pin.x) / r1;
+    const uy = (A.y - pin.y) / r1;
+    const c1 = { x: mx + uy * h, y: my - ux * h };
+    const c2 = { x: mx - uy * h, y: my + ux * h };
+    pivot = c1.y <= c2.y ? c1 : c2; // upper solution
+  }
+  const base = Math.atan2(pin.y - pivot.y, pin.x - pivot.x);
+  const armAng = base + (g.bladeOffDeg * Math.PI) / 180;
+  const tip = { x: pivot.x + g.bladeLen * Math.cos(armAng), y: pivot.y + g.bladeLen * Math.sin(armAng) };
+  const mid = { x: pivot.x + (g.bladeLen * 0.55) * Math.cos(armAng), y: pivot.y + (g.bladeLen * 0.55) * Math.sin(armAng) };
+  return { pin, pivot, tip, mid };
+}
+
+/* eased crank angle — real wiper linkages slow near stroke ends */
+function easedCrank(progress: number, mirror: boolean): number {
+  const e = 0.5 - 0.5 * Math.cos(Math.PI * progress);
+  const deg = CRANK_MIN + (CRANK_MAX - CRANK_MIN) * e;
+  return mirror ? 180 - deg : deg;
+}
+
+/* ---------------- sim state ---------------- */
 
 interface SimEvent {
   id: number;
@@ -90,10 +165,18 @@ function initialSim(): SimState {
   };
 }
 
+interface Drop { x: number; y: number; r: number; v: number }
+
+const GLASS = { x1: 70, y1: 75, x2: 362, y2: 232 };
+
 export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
   const [inputs, setInputs] = useState<Inputs>(DEFAULT_INPUTS);
   const inputsRef = useRef<Inputs>(inputs);
   inputsRef.current = inputs;
+
+  const [style, setStyle] = useState<StyleKey>('pantograph');
+  const styleRef = useRef<StyleKey>(style);
+  styleRef.current = style;
 
   const simRef = useRef<SimState>(initialSim());
   const [sim, setSim] = useState<SimState>(simRef.current);
@@ -107,6 +190,15 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
   const evIdRef = useRef(1);
   const falseEvRef = useRef(-100);
   const defrostEvRef = useRef(-100);
+
+  const dropsRef = useRef<Drop[]>(
+    Array.from({ length: 170 }, () => ({
+      x: GLASS.x1 + 8 + Math.random() * (GLASS.x2 - GLASS.x1 - 16),
+      y: GLASS.y1 + Math.random() * (GLASS.y2 - GLASS.y1),
+      r: 1.2 + Math.random() * 2.2,
+      v: 0,
+    })),
+  );
 
   const pushEvent = (s: SimState, icon: SimEvent['icon']) => {
     const at = new Date().toLocaleTimeString(currentLang === 'ko' ? 'ko-KR' : 'en-US', { hour12: false });
@@ -128,6 +220,29 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
       s.rain += (target - s.rain) * 0.08;
       const contamOff = CONTAM_OFFSET[inp.contam] * (0.8 + 0.2 * Math.sin(t * 1.3));
       s.sensor = Math.min(1, Math.max(0, s.rain + contamOff));
+
+      // ---- droplet drift: gravity + wind streaking scaled by speed ----
+      const windX = -inp.speed * 0.012;
+      const drops = dropsRef.current;
+      for (const d of drops) {
+        if (d.y < 0) {
+          // cleared droplets respawn only while it is raining
+          if (s.rain > 0.08 && Math.random() < 0.05) {
+            d.y = GLASS.y1 + Math.random() * 12;
+            d.x = GLASS.x1 + 8 + Math.random() * (GLASS.x2 - GLASS.x1 - 16);
+            d.v = 0;
+          }
+          continue;
+        }
+        d.v = Math.min(3.2, d.v + 0.05 + inp.speed * 0.004);
+        d.y += d.v * (0.4 + s.rain * 1.2);
+        d.x += windX * (0.5 + s.rain);
+        if (d.y > GLASS.y2 - 2 || d.x < GLASS.x1 - 4) {
+          d.y = GLASS.y1 + Math.random() * 12;
+          d.x = GLASS.x1 + 8 + Math.random() * (GLASS.x2 - GLASS.x1 - 16);
+          d.v = 0;
+        }
+      }
 
       // ---- gear edge: rear wiper ----
       if (inp.gear !== prevGearRef.current) {
@@ -222,8 +337,29 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
         else { s.hold -= dt; if (s.hold <= 0) { s.state = 'AWAY'; s.progress = 0; } }
       }
 
-      // ---- motor current ----
+      // ---- droplet clearing by blade line ----
       const sweeping = s.state === 'AWAY' || s.state === 'HOME';
+      if (sweeping) {
+        const geoms = STYLES[styleRef.current];
+        for (const g of geoms) {
+          const L = solveLinkage(g, easedCrank(s.progress, g.mirror));
+          const dx = L.tip.x - L.pivot.x;
+          const dy = L.tip.y - L.pivot.y;
+          const len2 = dx * dx + dy * dy;
+          for (const d of drops) {
+            if (d.y < 0) continue;
+            let tt = ((d.x - L.pivot.x) * dx + (d.y - L.pivot.y) * dy) / len2;
+            tt = Math.max(0, Math.min(1, tt));
+            const px = L.pivot.x + tt * dx;
+            const py = L.pivot.y + tt * dy;
+            if (Math.hypot(d.x - px, d.y - py) < 7) {
+              d.y = -1; // cleared by blade
+            }
+          }
+        }
+      }
+
+      // ---- motor current ----
       const base = sweeping ? 4.2 + 0.6 * Math.sin(t * 9) : 0.4;
       s.motor += (base - s.motor) * (s.motor > 8 ? 0.25 : 0.35);
 
@@ -243,20 +379,12 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
     if (p.rearTrigger) rearRef.current = true;
   };
 
-  // droplet field (fixed positions, opacity driven by rain)
-  const droplets = useMemo(() => {
-    const pts: { x: number; y: number; r: number }[] = [];
-    for (let i = 0; i < 150; i++) {
-      pts.push({
-        x: 75 + Math.random() * 250,
-        y: 85 + Math.random() * 145,
-        r: 1.2 + Math.random() * 2.2,
-      });
-    }
-    return pts;
-  }, []);
+  const geoms = STYLES[style];
+  const linkages = geoms.map((g) => solveLinkage(g, easedCrank(sim.progress, g.mirror)));
+  const sweeping = sim.state === 'AWAY' || sim.state === 'HOME';
+  const drops = dropsRef.current;
+  const dropOpacity = Math.max(0, Math.min(0.85, sim.rain * 1.8));
 
-  const wiperAngle = -78 + sim.progress * 112;
   const stateLabel = sim.state === 'IDLE'
     ? translations['St IDLE'][currentLang]
     : sim.state === 'HOLD'
@@ -280,8 +408,8 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
           </div>
         </div>
 
-        {/* Presets */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        {/* Presets + linkage style */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
           {Object.keys(PRESETS).map((key) => (
             <button
               key={key}
@@ -291,6 +419,18 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
               {L(`Preset ${key}`)}
             </button>
           ))}
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-[10px] text-[#6f8377] uppercase tracking-wider">{L('Wiper Style Label')}</span>
+            {(Object.keys(STYLES) as StyleKey[]).map((sk) => (
+              <button
+                key={sk}
+                onClick={() => setStyle(sk)}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold ${style === sk ? 'bg-[#8fbf9f] text-[#1c2321]' : 'bg-[#2c3a35] text-[#9bb09e] hover:text-stone-100'}`}
+              >
+                {L(`Style ${sk}`)}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid lg:grid-cols-[1fr_1.35fr_1fr] gap-4">
@@ -467,10 +607,20 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
             </div>
           </div>
 
-          {/* ---------------- CENTER: CAR SVG ---------------- */}
+          {/* ---------------- CENTER: CAR SVG with linkage mechanism ---------------- */}
           <div className="bg-[#222b28] rounded-2xl border border-[#313f3c] p-4 flex flex-col">
             <svg viewBox="0 0 400 300" className="w-full">
-              {/* sky / night */}
+              <defs>
+                <clipPath id="glassClip">
+                  <polygon points="70,75 330,75 362,232 38,232" />
+                </clipPath>
+                <linearGradient id="glassGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={inputs.night ? '#101917' : '#182622'} />
+                  <stop offset="100%" stopColor={inputs.night ? '#182420' : '#24352f'} />
+                </linearGradient>
+              </defs>
+
+              {/* sky */}
               <rect x="0" y="0" width="400" height="300" rx="16" fill={inputs.night ? '#141b18' : '#1b2622'} />
               {inputs.night && (
                 <>
@@ -480,34 +630,88 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
                   <circle cx="220" cy="25" r="1.2" fill="#c4e0cc" opacity="0.5" />
                 </>
               )}
+
               {/* car body */}
               <path d="M 30 250 Q 30 235 50 232 L 350 232 Q 370 235 370 250 L 370 285 Q 370 292 362 292 L 38 292 Q 30 292 30 285 Z" fill="#2c3a35" stroke="#3d4f48" strokeWidth="2" />
+
               {/* windshield */}
-              <polygon points="70,75 330,75 362,232 38,232" fill={inputs.night ? '#182420' : '#20302c'} stroke="#4a5f57" strokeWidth="2.5" />
-              {/* rain streaks on glass */}
-              {droplets.map((d, i) => {
-                const op = Math.max(0, Math.min(0.85, sim.rain * 1.8 - (i / droplets.length) * 1.3));
-                if (op <= 0.02) return null;
-                return <circle key={i} cx={d.x} cy={d.y} r={d.r} fill="#7fb3d5" opacity={op} />;
+              <polygon points="70,75 330,75 362,232 38,232" fill="url(#glassGrad)" stroke="#4a5f57" strokeWidth="2.5" />
+
+              {/* droplets (clipped to glass) with gravity drift + wind streaks */}
+              <g clipPath="url(#glassClip)">
+                {drops.map((d, i) => {
+                  if (d.y < 0 || dropOpacity <= 0.03) return null;
+                  const streak = Math.min(14, d.v * 3.5 * (inputs.speed / 120));
+                  return (
+                    <g key={i} opacity={dropOpacity}>
+                      <circle cx={d.x} cy={d.y} r={d.r} fill="#7fb3d5" opacity="0.8" />
+                      {streak > 2 && (
+                        <line x1={d.x} y1={d.y - d.r} x2={d.x + streak * 0.35} y2={d.y - d.r - streak} stroke="#7fb3d5" strokeWidth="0.8" opacity="0.35" />
+                      )}
+                    </g>
+                  );
+                })}
+
+                {/* wet sheen when raining */}
+                {sim.rain > 0.3 && (
+                  <polygon points="70,75 330,75 362,232 38,232" fill="#7fb3d5" opacity={sim.rain * 0.08} />
+                )}
+              </g>
+
+              {/* linkage mechanism: crank disc + crank arm + link + pivot arm + joints */}
+              {linkages.map((lk, i) => {
+                const g = geoms[i];
+                return (
+                  <g key={`mech-${style}-${i}`}>
+                    <circle cx={g.crank.x} cy={g.crank.y} r={g.rCrank + 3} fill="#26312d" stroke="#4a5f57" strokeWidth="1.5" />
+                    <line x1={g.crank.x} y1={g.crank.y} x2={lk.pin.x} y2={lk.pin.y} stroke="#8fbf9f" strokeWidth="4" strokeLinecap="round" />
+                    <line x1={lk.pin.x} y1={lk.pin.y} x2={lk.pivot.x} y2={lk.pivot.y} stroke="#c4e0cc" strokeWidth="3" strokeLinecap="round" />
+                    <line x1={g.pivotAnchor.x} y1={g.pivotAnchor.y} x2={lk.pivot.x} y2={lk.pivot.y} stroke="#6f8377" strokeWidth="2.5" strokeLinecap="round" />
+                    <circle cx={g.crank.x} cy={g.crank.y} r="4" fill="#8fbf9f" />
+                    <circle cx={lk.pin.x} cy={lk.pin.y} r="3.5" fill="#e6f2ea" />
+                    <circle cx={lk.pivot.x} cy={lk.pivot.y} r="4" fill="#e6f2ea" />
+                    <circle cx={g.pivotAnchor.x} cy={g.pivotAnchor.y} r="3" fill="#6f8377" />
+                  </g>
+                );
               })}
-              {/* wiper arms */}
-              {[150, 262].map((px) => (
-                <g key={px} transform={`rotate(${wiperAngle} ${px} 228)`}>
-                  <line x1={px} y1={228} x2={px} y2={118} stroke="#c4e0cc" strokeWidth="3.5" strokeLinecap="round" />
-                  <line x1={px - 14} y1={122} x2={px + 14} y2={114} stroke="#e6f2ea" strokeWidth="5" strokeLinecap="round" />
-                </g>
-              ))}
-              <circle cx="150" cy="228" r="5" fill="#4a5f57" />
-              <circle cx="262" cy="228" r="5" fill="#4a5f57" />
+
+              {/* wiper arms + blades (slightly flexed while sweeping) */}
+              {linkages.map((lk, i) => {
+                const bow = sweeping ? 0.06 : 0.02;
+                const cx = (lk.pivot.x + lk.tip.x) / 2 - (lk.tip.y - lk.pivot.y) * bow;
+                const cy = (lk.pivot.y + lk.tip.y) / 2 + (lk.tip.x - lk.pivot.x) * bow;
+                return (
+                  <g key={`arm-${style}-${i}`}>
+                    <path
+                      d={`M ${lk.pivot.x} ${lk.pivot.y} Q ${cx} ${cy} ${lk.mid.x} ${lk.mid.y}`}
+                      stroke="#c4e0cc" strokeWidth="3.5" fill="none" strokeLinecap="round"
+                    />
+                    <line
+                      x1={lk.mid.x} y1={lk.mid.y} x2={lk.tip.x} y2={lk.tip.y}
+                      stroke="#e6f2ea" strokeWidth={sweeping ? 6 : 5} strokeLinecap="round"
+                      opacity={sweeping ? 0.85 : 1}
+                    />
+                    {sweeping && (
+                      <line
+                        x1={lk.mid.x} y1={lk.mid.y} x2={lk.tip.x} y2={lk.tip.y}
+                        stroke="#e6f2ea" strokeWidth="10" strokeLinecap="round" opacity="0.12"
+                      />
+                    )}
+                    <circle cx={lk.tip.x} cy={lk.tip.y} r="2.5" fill="#c4e0cc" />
+                  </g>
+                );
+              })}
+
               {/* washer spray */}
               {sim.washer > 0 && (
-                <g opacity="0.85">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <circle key={i} cx={120 + i * 40} cy={238 - i * 4} r={2.5} fill="#7fb3d5" />
+                <g opacity="0.85" clipPath="url(#glassClip)">
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <circle key={i} cx={110 + i * 36} cy={236 - i * 6 - Math.random() * 4} r={2.5} fill="#7fb3d5" />
                   ))}
                 </g>
               )}
-              {/* hood nozzles */}
+
+              {/* cowl / nozzles */}
               <rect x="110" y="236" width="180" height="4" rx="2" fill="#3d4f48" />
             </svg>
 
@@ -566,7 +770,7 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
 
             {/* wiper state */}
             <div className="flex items-center gap-2 rounded-lg bg-[#2c3a35] px-3 py-2">
-              <RotateCw className={`w-4 h-4 ${sim.state === 'AWAY' || sim.state === 'HOME' ? 'text-[#8fbf9f] animate-spin' : 'text-[#6f8377]'}`} style={{ animationDuration: '2s' }} />
+              <RotateCw className={`w-4 h-4 ${sweeping ? 'text-[#8fbf9f] animate-spin' : 'text-[#6f8377]'}`} style={{ animationDuration: '2s' }} />
               <span className="text-xs text-[#9bb09e]">{L('Out State')}</span>
               <span className="ml-auto font-mono text-sm text-stone-100">{stateLabel}</span>
             </div>
