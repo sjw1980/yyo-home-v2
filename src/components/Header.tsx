@@ -25,7 +25,6 @@ export default function Header({
     { id: 'mission', label: translations['Our Core Mission'][currentLang], icon: ShieldAlert },
     { id: 'emulator', label: translations['Diagnostics Simulator'][currentLang], icon: Cpu },
     { id: 'seat-simulator', label: translations['Seat Simulator'][currentLang], icon: Armchair },
-    { id: 'ai-copilot', label: translations['AI Copilot Nav'][currentLang], icon: BrainCircuit },
     { id: 'contact', label: translations['Contact'][currentLang], icon: Mail },
     { id: 'location', label: translations['Find Us'][currentLang], icon: Navigation }
   ];

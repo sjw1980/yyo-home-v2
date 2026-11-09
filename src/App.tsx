@@ -7,7 +7,6 @@ import CoreMission from './components/CoreMission';
 import GiftService from './components/GiftService';
 import RelaxationTest from './components/RelaxationTest';
 import SeatSimulator from './components/SeatSimulator';
-import AiEngineeringCopilot from './components/AiEngineeringCopilot';
 import Footer from './components/Footer';
 
 export default function App() {
@@ -77,9 +76,6 @@ export default function App() {
 
         {/* DPSS 전동 시트 제어 시뮬레이터 (원형 조작기 + CAN FD 로그) */}
         <SeatSimulator currentLang={currentLang} />
-
-        {/* AI 엔지니어링 코파일럿 (FMEA 고장 분석 + ASPICE 게이트 리뷰) */}
-        <AiEngineeringCopilot currentLang={currentLang} />
 
         {/* 사옥 위치, 주차안내, 문의하기 */}
         <GiftService currentLang={currentLang} />
