@@ -34,28 +34,28 @@ interface WiperGeom {
   bladeLen: number;
   bladeOffDeg: number;
   mirror: boolean;
+  crankMin: number;
+  crankMax: number;
 }
 
 const STYLES: Record<StyleKey, WiperGeom[]> = {
   pantograph: [
-    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false },
-    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true },
+    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
+    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
   ],
   tandem: [
-    { crank: { x: 118, y: 246 }, rCrank: 26, pivotAnchor: { x: 158, y: 224 }, rPivot: 34, bladeLen: 122, bladeOffDeg: 14, mirror: false },
-    { crank: { x: 142, y: 252 }, rCrank: 22, pivotAnchor: { x: 182, y: 232 }, rPivot: 30, bladeLen: 92, bladeOffDeg: 14, mirror: false },
+    { crank: { x: 112, y: 246 }, rCrank: 26, pivotAnchor: { x: 152, y: 224 }, rPivot: 34, bladeLen: 122, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
+    { crank: { x: 158, y: 254 }, rCrank: 22, pivotAnchor: { x: 202, y: 236 }, rPivot: 30, bladeLen: 92, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
   ],
   opposite: [
-    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false },
-    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true },
+    { crank: { x: 132, y: 246 }, rCrank: 26, pivotAnchor: { x: 172, y: 224 }, rPivot: 34, bladeLen: 118, bladeOffDeg: 14, mirror: false, crankMin: 18, crankMax: 162 },
+    { crank: { x: 268, y: 246 }, rCrank: 26, pivotAnchor: { x: 228, y: 224 }, rPivot: 34, bladeLen: 100, bladeOffDeg: 14, mirror: true, crankMin: 18, crankMax: 162 },
   ],
   single: [
-    { crank: { x: 128, y: 246 }, rCrank: 28, pivotAnchor: { x: 168, y: 224 }, rPivot: 36, bladeLen: 148, bladeOffDeg: 12, mirror: false },
+    { crank: { x: 100, y: 248 }, rCrank: 28, pivotAnchor: { x: 150, y: 226 }, rPivot: 36, bladeLen: 130, bladeOffDeg: 8, mirror: false, crankMin: 25, crankMax: 115 },
   ],
 };
 
-const CRANK_MIN = 18;
-const CRANK_MAX = 162;
 
 interface Linkage {
   pin: { x: number; y: number };
@@ -67,33 +67,21 @@ interface Linkage {
 function solveLinkage(g: WiperGeom, crankDeg: number): Linkage {
   const th = (g.mirror ? 180 - crankDeg : crankDeg) * (Math.PI / 180);
   const pin = { x: g.crank.x + g.rCrank * Math.cos(th), y: g.crank.y - g.rCrank * Math.sin(th) };
-  const A = g.pivotAnchor;
-  const r1 = Math.hypot(pin.x - A.x, pin.y - A.y);
-  const r2 = g.rPivot;
-  let pivot = { x: A.x, y: A.y - r2 };
-  if (r1 > 1e-6 && r1 <= r2 * 2) {
-    const a = r1 / 2; // equal-arm pantograph: intersection on perpendicular bisector
-    const mx = (pin.x + A.x) / 2;
-    const my = (pin.y + A.y) / 2;
-    const h = Math.sqrt(Math.max(0, r2 * r2 - a * a));
-    const ux = (A.x - pin.x) / r1;
-    const uy = (A.y - pin.y) / r1;
-    const c1 = { x: mx + uy * h, y: my - ux * h };
-    const c2 = { x: mx - uy * h, y: my + ux * h };
-    pivot = c1.y <= c2.y ? c1 : c2; // upper solution
-  }
-  const base = Math.atan2(pin.y - pivot.y, pin.x - pivot.x);
-  const armAng = base + (g.bladeOffDeg * Math.PI) / 180;
+  // true parallelogram 4-bar: rocker stays parallel to crank (parallel-wiper linkage)
+  const pivot = { x: pin.x + g.pivotAnchor.x - g.crank.x, y: pin.y + g.pivotAnchor.y - g.crank.y };
+  // blade rides on the rocker, extending upward past the wiper pivot
+  const rockerAng = Math.atan2(pivot.y - g.pivotAnchor.y, pivot.x - g.pivotAnchor.x);
+  const armAng = rockerAng + (g.bladeOffDeg * Math.PI) / 180 * (g.mirror ? -1 : 1);
   const tip = { x: pivot.x + g.bladeLen * Math.cos(armAng), y: pivot.y + g.bladeLen * Math.sin(armAng) };
   const mid = { x: pivot.x + (g.bladeLen * 0.55) * Math.cos(armAng), y: pivot.y + (g.bladeLen * 0.55) * Math.sin(armAng) };
   return { pin, pivot, tip, mid };
 }
 
 /* eased crank angle — real wiper linkages slow near stroke ends */
-function easedCrank(progress: number, mirror: boolean): number {
+function easedCrank(progress: number, g: WiperGeom): number {
   const e = 0.5 - 0.5 * Math.cos(Math.PI * progress);
-  const deg = CRANK_MIN + (CRANK_MAX - CRANK_MIN) * e;
-  return mirror ? 180 - deg : deg;
+  const deg = g.crankMin + (g.crankMax - g.crankMin) * e;
+  return g.mirror ? 180 - deg : deg;
 }
 
 /* ---------------- sim state ---------------- */
@@ -342,7 +330,7 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
       if (sweeping) {
         const geoms = STYLES[styleRef.current];
         for (const g of geoms) {
-          const L = solveLinkage(g, easedCrank(s.progress, g.mirror));
+          const L = solveLinkage(g, easedCrank(s.progress, g));
           const dx = L.tip.x - L.pivot.x;
           const dy = L.tip.y - L.pivot.y;
           const len2 = dx * dx + dy * dy;
@@ -380,7 +368,7 @@ export default function WiperSimulator({ currentLang }: WiperSimulatorProps) {
   };
 
   const geoms = STYLES[style];
-  const linkages = geoms.map((g) => solveLinkage(g, easedCrank(sim.progress, g.mirror)));
+  const linkages = geoms.map((g) => solveLinkage(g, easedCrank(sim.progress, g)));
   const sweeping = sim.state === 'AWAY' || sim.state === 'HOME';
   const drops = dropsRef.current;
   const dropOpacity = Math.max(0, Math.min(0.85, sim.rain * 1.8));
