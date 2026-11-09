@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, Globe, Cpu, ShieldAlert, Navigation, Mail, Activity, Armchair, BrainCircuit, CloudRain } from 'lucide-react';
+import { Menu, X, Globe, Cpu, ShieldAlert, Navigation, Mail, Activity, Armchair, BrainCircuit } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { translations } from '../data';
 import YOLogo from './YOLogo';
@@ -26,7 +26,6 @@ export default function Header({
     { id: 'emulator', label: translations['Diagnostics Simulator'][currentLang], icon: Cpu },
     { id: 'seat-simulator', label: translations['Seat Simulator'][currentLang], icon: Armchair },
     { id: 'wiper-simulator', label: translations['Wiper Simulator Nav'][currentLang], icon: CloudRain },
-    { id: 'ai-copilot', label: translations['AI Copilot Nav'][currentLang], icon: BrainCircuit },
     { id: 'contact', label: translations['Contact'][currentLang], icon: Mail },
     { id: 'location', label: translations['Find Us'][currentLang], icon: Navigation }
   ];
