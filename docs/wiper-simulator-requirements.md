@@ -1,7 +1,7 @@
 # Wiper Simulator — 요구사양 v0.1
 
 yyo.co.kr "바디 컨트롤 데모" 시리즈의 첫 번째: **레인센싱 와이퍼 시뮬레이터**.
-seat 시뮬레이터와 동일한 톤(조작기 + CAN 로그 + 실시간 물리 모델)로 구현한다.
+seat 시뮬레이터와 동일한 톤(조작기 + 실시간 물리 모델)로 구현하되, CAN 로그는 노출하지 않는다.
 
 ---
 
@@ -62,17 +62,37 @@ seat 시뮬레이터와 동일한 톤(조작기 + CAN 로그 + 실시간 물리 
 - **FR-9 (park home)**: OFF 전환 시 암이 home position 도달 후 정지 (mid-sweep cutoff 금지).
 - **FR-10 (MIST)**: 레버 MIST → 1 cycle만, AUTO 상태 복원.
 
-## 4. CAN/LIN 메시지 모델 (화면 로그용)
+## 4. 입력/출력 표출 모델 (CAN 로그 대체)
 
-| Message | ID 예시 | 신호 | 주기 |
-|---------|--------|------|------|
-| WiperSwitchInfo | 0x3A1 | lever_mode, sensitivity | event/100ms |
-| RainSensorStatus | 0x3A2 | rain_index(0~1), sensor_fault | 100 ms |
-| VehicleSpeed | 0x150 (shared) | speed_kmh | 20 ms |
-| WiperActuation | 0x3A3 | state(IDLE/SWEEP_HOME/SWEEP_AWAY/HOLD), motor_current, cycle_count | 50 ms |
-| BCM_WiperDiag | 0x7B3 | stall, freeze, blade_wear | event |
+CAN 메시지 테이블은 노출하지 않는다. 대신 섹션 좌우에 **입력 패널 / 출력 패널**을 두고
+각 신호를 아이콘 + 실시간 값으로 표출한다.
 
-seat 시뮬레이터의 CAN FD 로그 컴포넌트 패턴 재사용.
+### 입력 패널 (icons: lucide-react)
+| 신호 | 아이콘 | 표출 값 |
+|------|--------|---------|
+| 강우 강도 | CloudRain | 강도 단계 라벨 + rain_index(0~1) |
+| 차량 속도 | Gauge | km/h (숫자 + 아크 게이지) |
+| 외기 온도 | Thermometer | ℃ (0℃ 미만 결빙 색상) |
+| 글래스 오염도 | Droplets | clean→oily 단계 바 |
+| 주/야간 | Sun / Moon | 아이콘 토글 |
+| 레버 모드 | ToggleLeft | OFF/INT/LO/HI/MIST 현재 위치 |
+| 감도 다이얼 | SlidersHorizontal | 1–10 |
+| 기어 | Repeat | D / R |
+| defroster | Wind | ON/OFF |
+
+### 출력 패널
+| 신호 | 아이콘 | 표출 값 |
+|------|--------|---------|
+| 와이퍼 상태 | RotateCw | IDLE / SWEEP / HOLD + cycle/min |
+| 현재 인터벌 | Timer | 계산된 목표 간격 (s) |
+| washer | SprayCan | 작동 중 애니메이션 |
+| 모터 부하 | Zap | 전류 바 (stall 시 경고색) |
+| 결빙 보호 | Snowflake | 보호 모드 점등 |
+| 후방 와이퍼 | Repeat | R 연동 작동 표시 |
+| 진단 이벤트 | AlertTriangle | stall/false-wipe/freeze 이벤트 로그 (최신 5건, 아이콘+문구) |
+
+입력 → 출력 인과가 한 화면에서 보이도록 좌(입력)·중앙(SVG 차)·우(출력) 3열 레이아웃.
+
 
 ## 5. UI 요구사항
 
@@ -81,7 +101,6 @@ seat 시뮬레이터의 CAN FD 로그 컴포넌트 패턴 재사용.
 - **글로즈 비전 영역**: 강우 강도에 따라 물방울 파티클 밀도 변화 (canvas 또는 SVG circle).
 - **레인센서 게이지**: rain_index 실시간 바 + start/stop 임계선 표시.
 - **인터벌 예측 링**: 현재 계산된 목표 간격 시각화 (f(rain, speed) 커브 그래프 오버레이).
-- **CAN 로그 패널**: 하단 실시간 프레임 흐름 (seat와 동일 컴포넌트).
 - **시나리오 프리셋 버튼**: `고속 고속도로 폭우`, `도심 간헐 비`, `세차 후 오염 센서`,
   `겨울 결빙 stall`, `주차 후 후방 와이퍼` — 각 프리셋이 입력 팩터 일괄 세팅.
 - **이상 동작 체험**: 오염도 최대 + AUTO → false wiping 발생 → 원인을 로그로 설명.
@@ -111,12 +130,13 @@ seat 시뮬레이터의 CAN FD 로그 컴포넌트 패턴 재사용.
 ## 7. 비기능 요구
 
 - API 키 불필요 (순수 물리 모델 + 규칙 엔진) — 현재 사이트 데모 정책 유지.
-- seat 시뮬레이터와 공용 스타일 (다크 그린 팔레트, CAN 로그 컴포넌트).
+- seat 시뮬레이터와 공용 스타일 (다크 그린 팔레트).
 - ko/en 이중 언어 (translations dictionary).
 - 60 fps sweep 애니메이션 (motion/react).
 
 ## 8. 구현 범위 (v1)
 
 Section `#wiper-simulator`, `WiperSimulator.tsx`:
-SVG 전면 차 + 2암 sweep, 레인센서 게이지, 조작기(레버/다이얼), 프리셋 5종, CAN 로그.
+SVG 전면 차 + 2암 sweep, 좌측 입력 패널 / 우측 출력 패널(아이콘+실시간 값), 레인센서 게이지,
+프리셋 5종. CAN 로그 없음 — 인과 관계는 입력/출력 패널로 표현.
 미구현(roadmap): 후방 와이퍼 애니메이션, 결빙 stall 물리, camera-based 모드.
