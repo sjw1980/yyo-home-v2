@@ -222,8 +222,8 @@ export const translations: TranslationDictionary = {
     en: "Look us, What we are"
   },
   "About Company Name": {
-    ko: "주식회사 윤율온 (YYO)",
-    en: "Yunyulon Co., Ltd. (YYO)"
+    ko: "윤율온 (YYO)",
+    en: "Yunyulon (YYO)"
   },
   "Yunyulon History Body": {
     ko: "윤율온(YYO)은 급변하는 글로벌 모빌리티 질서 속에서 소프트웨어 정의 자동차(SDV)의 두뇌가 되는 임베디드 인텔리전스를 개발하는 기술 전문 기업입니다. 우리는 CAN/DoIP 통신 기반 고성능 펌웨어 플래시 부트로더 하드웨어 인프라부터 UDS 진단 규격 준수, AUTOSAR 소프트웨어 레이어, 견고한 ISO 26262 안전 프로세스 수립까지 글로벌 규격에 부합하는 최고의 모빌리티 컨설팅 및 엔지니어링을 제공합니다.",
@@ -368,15 +368,15 @@ export const translations: TranslationDictionary = {
 
   // Footer / Corporate Info
   "Company Register Title": {
-    ko: "주식회사 윤율온 (Yunyulon Co., Ltd.)",
-    en: "Yunyulon Co., Ltd. (Short: YYO)"
+    ko: "윤율온 (YYO)",
+    en: "YYO (Yunyulon)"
   },
   "Company Register Body": {
     ko: "대표이사: 이지혜 | 개인정보보호책임자: 이지혜",
     en: "CEO: LEE JI HYE | Chief Privacy Officer: LEE JI HYE"
   },
   "Footer Disclaimer": {
-    ko: "© 2026 주식회사 윤율온. All Rights Reserved. 본 사이트에 수록된 임베디드 아키텍처 및 진단 알고리즘은 오토사 표준을 준수합니다.",
-    en: "© 2026 Yunyulon Co., Ltd. All Rights Reserved. All embedded architectures on this system conform perfectly to AUTOSAR and ISO standards."
+    ko: "© 2026 윤율온(YYO). All Rights Reserved. 본 사이트에 수록된 임베디드 아키텍처 및 진단 알고리즘은 오토사 표준을 준수합니다.",
+    en: "© 2026 Yunyulon (YYO). All Rights Reserved. All embedded architectures on this system conform perfectly to AUTOSAR and ISO standards."
   }
 };
