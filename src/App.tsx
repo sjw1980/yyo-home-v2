@@ -7,6 +7,7 @@ import CoreMission from './components/CoreMission';
 import GiftService from './components/GiftService';
 import RelaxationTest from './components/RelaxationTest';
 import SeatSimulator from './components/SeatSimulator';
+import WiperSimulator from './components/WiperSimulator';
 import Footer from './components/Footer';
 
 export default function App() {
@@ -76,6 +77,9 @@ export default function App() {
 
         {/* 전동 시트 제어 시뮬레이터 (원형 조작기 + CAN FD 로그) */}
         <SeatSimulator currentLang={currentLang} />
+
+        {/* 레인센싱 와이퍼 시뮬레이터 (BCM 물리 모델 + 링크기구 + 입출력 인과 패널) */}
+        <WiperSimulator currentLang={currentLang} />
 
         {/* 사옥 위치, 주차안내, 문의하기 */}
         <GiftService currentLang={currentLang} />
