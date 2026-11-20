@@ -21,14 +21,16 @@ export default function Hero({
       {/* Background Matrix/Grid Overlay to look extremely technical */}
       <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#56807d_1.2px,transparent_1.2px)] [background-size:24px_24px] z-0" />
 
-      {/* Brand-safe generated EV backdrop (no third-party photo, no logos/text) */}
+      {/* Brand-safe AI-generated EV backdrop (ComfyUI/SDXL, no third-party photo, no logos/text) */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/hero-bg.svg"
-          alt="Futuristic EV silhouette with telemetry arcs"
-          className="w-full h-full object-cover filter brightness-[0.55] contrast-[1.05]"
+          src="/hero-bg.webp"
+          alt="Futuristic unbadged EV concept in a dark studio"
+          className="w-full h-full object-cover filter brightness-[0.6] contrast-[1.05]"
           referrerPolicy="no-referrer"
         />
+        {/* left-weight gradient so headline text keeps contrast over the car */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0d1111] via-[#0d1111]/70 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0d1111] via-[#0d1111]/70 to-[#1c2321]/60" />
       </div>
 
