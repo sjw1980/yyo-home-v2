@@ -76,12 +76,14 @@ export default function BrandStory({ currentLang }: BrandStoryProps) {
           >
             <div className="aspect-[4/5] overflow-hidden rounded-2xl border border-[#313f3c]/50 relative group bg-black/40">
               <img
-                src="https://images.unsplash.com/photo-1508974239320-0a029497e820?auto=format&fit=crop&q=80&w=800"
-                alt="High-Tech Diagnostic Control HUD Simulation"
-                className="w-full h-full object-cover filter brightness-[0.6] saturation-[0.85] transition-transform duration-700 group-hover:scale-105"
+                src="/brandstory-bg.webp"
+                alt="Unbadged EV charging at night beside a YYO charging pedestal"
+                className="w-full h-full object-cover filter brightness-[0.7] saturation-[0.9] transition-transform duration-700 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-[#1c2321]/30 mix-blend-multiply" />
+              {/* bottom scrim so the telemetry box never fights the photo */}
+              <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-[#0d1111]/85 to-transparent" />
               
               {/* Floating diagnostic telemetry box inside graphic to keep UI highly unique and distinct */}
               <div className="absolute inset-x-6 bottom-6 bg-[#131a19]/90 border border-[#313f3c] p-6 rounded-xl backdrop-blur-md">
