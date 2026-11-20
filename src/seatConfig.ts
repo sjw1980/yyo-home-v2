@@ -1,5 +1,5 @@
 /**
- * seatConfig.ts — DPSS(Driver Position Setting System) 전동 시트 시뮬레이터 정의
+ * seatConfig.ts — 전동 시트(Power Seat) 시뮬레이터 정의
  *
  * D:\Works\power_seat_simulation\seat_simulator\seat_main.py 의
  *  AXIS_CONFIG / MODE_CONFIG / MODE_SPEC_LABELS 를 React 웹용으로 이식한 모듈입니다.
@@ -53,7 +53,7 @@ export interface AxisConfig {
 
 export interface ModeConfig {
   key: ModeKey;
-  /** DPSS_Mode_status 값 (0x15A) */
+  /** 시트 모드 상태 신호값 (0x15A) */
   status: number;
   name: LocalizedText;
   subName: string;
@@ -238,7 +238,7 @@ export const MODE_ORDER: ModeKey[] = [
 
 /**
  * 화면 표시용 조작 코드 (C1~C8)
- * — 배열 순서가 그대로 코드 번호가 된다. `MODE_CONFIG[].status` 는 DPSS 신호값(0x15A)이라
+ * — 배열 순서가 그대로 코드 번호가 된다. `MODE_CONFIG[].status` 는 시트 모드 상태 신호값(0x15A)이라
  *    표시 코드와 일부러 분리했다 (프로토콜 값은 순서와 무관하게 고정).
  */
 export function modeCode(modeKey: ModeKey): string {
@@ -246,7 +246,7 @@ export function modeCode(modeKey: ModeKey): string {
   return idx >= 0 ? `C${idx + 1}` : 'C—';
 }
 
-/** 릴렉스 프리셋 레이어 키 (DPSS Mode 09) — 모드 트랙이 아닌 프리셋 패널에서 조작한다 */
+/** 릴렉스 프리셋 레이어 키 (모드 09) — 모드 트랙이 아닌 프리셋 패널에서 조작한다 */
 export const RELAX_PRESET_KEY: ModeKey = 'relaxation';
 
 export const MODE_CONFIG: Record<ModeKey, ModeConfig> = {

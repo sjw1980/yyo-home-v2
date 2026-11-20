@@ -328,17 +328,17 @@ export const translations: TranslationDictionary = {
     en: "Real-Time Controller Area Network (CAN) Bus Monitored Frame Logs"
   },
 
-  // DPSS Power Seat Simulator
+  // Power Seat Simulator
   "Seat Simulator": {
     ko: "시트 시뮬레이터",
     en: "Seat Simulator"
   },
   "Seat Simulator Title": {
-    ko: "DPSS 전동 시트 제어 시뮬레이터",
-    en: "DPSS Power Seat Control Simulator"
+    ko: "전동 시트 제어 시뮬레이터",
+    en: "Power Seat Control Simulator"
   },
   "Seat Simulator Subtitle": {
-    ko: "운전석 시트 조작기(DPSS)의 8개 컨트롤(C1~C8)과 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 각 컨트롤 줄에 그 컨트롤이 가진 방향 버튼이 있습니다 — 누른 채 유지하면 시트 형상이 실시간으로 갱신되고, 릴렉스는 모드가 아닌 독립 프리셋 레이어로 어떤 컨트롤에서든 6축에 겹쳐 동작합니다.",
+    ko: "운전석 시트 조작기의 8개 컨트롤(C1~C8)과 10개 축을 가상 모터 물리 모델로 직접 조작해 보세요. 각 컨트롤 줄에 그 컨트롤이 가진 방향 버튼이 있습니다 — 누른 채 유지하면 시트 형상이 실시간으로 갱신되고, 릴렉스는 모드가 아닌 독립 프리셋 레이어로 어떤 컨트롤에서든 6축에 겹쳐 동작합니다.",
     en: "Drive all 8 controls (C1~C8) and 10 seat axes through a virtual motor physics model — every control row carries its own direction buttons, so press and hold one to reshape the seat in real time. Relax is not a control but a standalone preset layer that overlays 6 axes from any control."
   },
   "Seat Mode Panel": {

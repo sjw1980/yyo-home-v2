@@ -74,7 +74,7 @@ export default function App() {
         {/* Real-time CAN Bus Diagnostics & Secure OTA Simulator */}
         <RelaxationTest currentLang={currentLang} />
 
-        {/* DPSS 전동 시트 제어 시뮬레이터 (원형 조작기 + CAN FD 로그) */}
+        {/* 전동 시트 제어 시뮬레이터 (원형 조작기 + CAN FD 로그) */}
         <SeatSimulator currentLang={currentLang} />
 
         {/* 사옥 위치, 주차안내, 문의하기 */}
