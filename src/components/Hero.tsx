@@ -27,6 +27,7 @@ export default function Hero({
           src="/hero-bg.webp"
           alt="Futuristic unbadged EV concept in a dark studio"
           className="w-full h-full object-cover filter brightness-[0.6] contrast-[1.05]"
+          fetchPriority="high"
           referrerPolicy="no-referrer"
         />
         {/* left-weight gradient so headline text keeps contrast over the car */}

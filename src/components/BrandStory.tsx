@@ -78,6 +78,7 @@ export default function BrandStory({ currentLang }: BrandStoryProps) {
               <img
                 src="/brandstory-bg.webp"
                 alt="Unbadged EV charging at night beside a YYO charging pedestal"
+                loading="lazy"
                 className="w-full h-full object-cover filter brightness-[0.7] saturation-[0.9] transition-transform duration-700 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
