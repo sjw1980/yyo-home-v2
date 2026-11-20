@@ -61,7 +61,7 @@ export default function BrandStory({ currentLang }: BrandStoryProps) {
             <div className="pt-6 border-t border-stone-800 flex items-center space-x-4">
               <YOLogo variant="original" size={48} className="rounded-xl" />
               <div className="text-xs tracking-widest text-[#9bb09e]">
-                <span className="font-semibold text-white">윤율온</span>
+                <span className="font-semibold text-white">주식회사 윤율온</span>
               </div>
             </div>
           </motion.div>
