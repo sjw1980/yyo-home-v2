@@ -107,8 +107,8 @@ interface SeatSimulatorProps {
 }
 
 /**
- * DPSS 전동 시트 시뮬레이터
- * (ref: seat_simulator/seat_main.py — 6가지 DPSS 모드 / 10개 축 물리 모델 / AUTO DEMO 상태머신)
+ * 전동 시트(Power Seat) 시뮬레이터
+ * (ref: seat_simulator/seat_main.py — 6가지 시트 모드 / 10개 축 물리 모델 / AUTO DEMO 상태머신)
  */
 export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
   const t = (key: string, fallback = '') => translations[key]?.[currentLang] ?? fallback;
@@ -1305,7 +1305,7 @@ export default function SeatSimulator({ currentLang }: SeatSimulatorProps) {
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-[#f0a53c]/40 bg-[#f0a53c]/10 mb-3">
             <span className="w-[7px] h-[7px] rounded-full bg-[#f0a53c] shadow-[0_0_10px_#f0a53c]" />
             <span className="text-[10.5px] tracking-[.3em] uppercase text-[#ffc276]">
-              Cabin HMI · DPSS Seat Simulator
+              Cabin HMI · Power Seat Simulator
             </span>
           </div>
           <h2 className="font-hmi-cond text-3xl md:text-[40px] font-bold uppercase tracking-[.04em] text-white mb-2">
