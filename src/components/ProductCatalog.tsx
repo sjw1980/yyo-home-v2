@@ -39,7 +39,7 @@ export default function ProductCatalog({ currentLang }: ProductCatalogProps) {
           <div className="mt-4 w-12 h-[2px] bg-[#7dbaaf] mx-auto" />
           <p className="mt-4 text-xs sm:text-sm text-stone-400 font-light leading-relaxed">
             {currentLang === 'ko'
-              ? '주식회사 윤율온(YYO)은 풍부한 실무 노하우를 바탕으로 글로벌 표준 규격을 만족하는 프리미엄 차량용 임베디드 및 엔지니어링 기술 솔루션을 설계 및 탑재합니다.'
+              ? '윤율온(YYO)은 풍부한 실무 노하우를 바탕으로 글로벌 표준 규격을 만족하는 프리미엄 차량용 임베디드 및 엔지니어링 기술 솔루션을 설계 및 탑재합니다.'
               : 'Our team delivers highly-specialized engineering stacks crafted under structural functional safety regulations, ensuring reliable performance across automotive systems.'
             }
           </p>
