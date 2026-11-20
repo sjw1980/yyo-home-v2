@@ -21,14 +21,16 @@ export default function Hero({
       {/* Background Matrix/Grid Overlay to look extremely technical */}
       <div className="absolute inset-0 opacity-15 pointer-events-none bg-[radial-gradient(#56807d_1.2px,transparent_1.2px)] [background-size:24px_24px] z-0" />
 
-      {/* Cyberpunk cockpit / electric vehicle Unsplash background */}
+      {/* Brand-safe AI-generated EV backdrop (ComfyUI/SDXL, no third-party photo, no logos/text) */}
       <div className="absolute inset-0 z-0">
         <img
-          src="https://images.unsplash.com/photo-1617788138017-80ad40651399?auto=format&fit=crop&q=80&w=1920"
-          alt="Futuristic Automotive Dashboard HUD"
-          className="w-full h-full object-cover filter brightness-[0.35] contrast-[1.05]"
+          src="/hero-bg.webp"
+          alt="Futuristic unbadged EV concept in a dark studio"
+          className="w-full h-full object-cover filter brightness-[0.6] contrast-[1.05]"
           referrerPolicy="no-referrer"
         />
+        {/* left-weight gradient so headline text keeps contrast over the car */}
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0d1111] via-[#0d1111]/70 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0d1111] via-[#0d1111]/70 to-[#1c2321]/60" />
       </div>
 
